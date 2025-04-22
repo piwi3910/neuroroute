@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import pino from 'pino';
+import { pino } from 'pino';
 import { performance } from 'perf_hooks';
 import { randomUUID } from 'crypto';
 

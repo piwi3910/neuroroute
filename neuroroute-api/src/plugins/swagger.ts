@@ -271,6 +271,6 @@ Rate limit headers are included in all responses:
 
 export default fp(swaggerPlugin, {
   name: 'swagger',
-  fastify: '4.x',
-  dependencies: ['@fastify/env'],
+  fastify: '5.x',
+  dependencies: ['env'],
 });

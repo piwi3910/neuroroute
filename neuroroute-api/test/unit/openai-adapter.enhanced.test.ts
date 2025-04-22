@@ -21,14 +21,41 @@ describe('OpenAI Adapter Enhanced Tests', () => {
 
     // Mock config
     app.decorate('config', {
-      OPENAI_API_KEY: 'test-api-key'
-    } as Record<string, unknown>);
+      OPENAI_API_KEY: 'test-api-key',
+      PORT: 3000,
+      HOST: 'localhost',
+      NODE_ENV: 'test',
+      DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/neuroroute_test',
+      REDIS_URL: 'redis://localhost:6379',
+      REDIS_CACHE_TTL: 300,
+      JWT_SECRET: 'test-secret',
+      JWT_EXPIRATION: '1h',
+      LOG_LEVEL: 'info',
+      API_RATE_LIMIT: 200,
+      API_TIMEOUT: 30000,
+      ENABLE_CACHE: true,
+      ENABLE_SWAGGER: true,
+      ENABLE_JWT_AUTH: true,
+      ENABLE_DYNAMIC_CONFIG: true,
+      ENABLE_METRICS: true,
+      ENABLE_TRACING: false,
+      COST_OPTIMIZE: false,
+      QUALITY_OPTIMIZE: true,
+      LATENCY_OPTIMIZE: false,
+      FALLBACK_ENABLED: true,
+      CHAIN_ENABLED: false,
+      CACHE_STRATEGY: 'default'
+    } as unknown as AppConfig);
 
     // Mock Redis for circuit breaker tests
-    app.decorate('redis', {
+    const redisMock = {
       get: jest.fn().mockResolvedValue(null),
       set: jest.fn().mockResolvedValue('OK')
-    } as unknown as Record<string, unknown>);
+    };
+    
+    app.decorate('redis', {
+      getter: () => redisMock
+    });
 
     // Create adapter
     adapter = createOpenAIAdapter(app, 'gpt-4');

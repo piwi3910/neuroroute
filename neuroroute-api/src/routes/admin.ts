@@ -31,7 +31,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
       }
 
       // Check if user has admin role
-      if (!request.user.roles?.includes('admin')) {
+      const user = request.user as JWTUser;
+      if (!user.roles?.includes('admin')) {
         return reply.code(403).send({
           error: 'Forbidden',
           message: 'Admin access required',
@@ -73,8 +74,22 @@ const adminRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
   fastify.get('/api-keys', async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       // Validate query parameters
-      const query = validateWithSchema(paginationSchema, request.query);
-      const filter = validateWithSchema(apiKeyFilterSchema, request.query);
+      const query = validateWithSchema<{
+        page: number;
+        limit: number;
+        sortBy?: string;
+        sortOrder: 'asc' | 'desc';
+      }>(paginationSchema, request.query);
+      
+      const filter = validateWithSchema<{
+        name?: string;
+        enabled?: boolean;
+        createdAfter?: string;
+        createdBefore?: string;
+        expiresAfter?: string;
+        expiresBefore?: string;
+        permissions?: string[];
+      }>(apiKeyFilterSchema, request.query);
 
       // Get API keys from database
       const { apiKeys, total } = await fastify.prisma.$transaction(async (tx: any) => {
@@ -127,8 +142,8 @@ const adminRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
 
       // Log audit event
       await auditLogService.log({
-        userId: request.user?.sub ?? 'unknown',
-        username: request.user?.name ?? 'unknown',
+        userId: (request.user as JWTUser | undefined)?.sub ?? 'unknown',
+        username: (request.user as JWTUser | undefined)?.name ?? 'unknown',
         action: 'list',
         resource: 'api_keys',
         status: 'success',
@@ -174,18 +189,14 @@ const adminRoutes: FastifyPluginAsync = async (fastify): Promise<void> => {
 
 };
 
-// Add type declaration for user property in FastifyRequest
-declare module 'fastify' {
-  interface FastifyRequest {
-    user?: {
-      sub: string;
-      name: string;
-      email: string;
-      roles: string[];
-      iat: number;
-      exp: number;
-    };
-  }
-}
+// Define our JWT user type
+export type JWTUser = {
+  sub: string;
+  name: string;
+  email: string;
+  roles: string[];
+  iat: number;
+  exp: number;
+};
 
 export default adminRoutes;

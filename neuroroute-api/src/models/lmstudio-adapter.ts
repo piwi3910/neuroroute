@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import axios from 'axios';
-import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk } from './base-adapter.js';
+import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk, ModelDetails } from './base-adapter.js';
 
 // LM Studio API response interface
 interface LMStudioResponse {
@@ -21,6 +21,7 @@ interface LMStudioResponse {
     completion_tokens: number;
     total_tokens: number;
   };
+  [key: string]: unknown; // Index signature for additional properties
 }
 
 // LM Studio model adapter
@@ -28,7 +29,7 @@ export class LMStudioAdapter extends BaseModelAdapter {
   private baseUrl: string;
   private timeout: number;
   private capabilities: string[];
-  private details: Record<string, any>;
+  private details: ModelDetails;
 
   constructor(fastify: FastifyInstance, modelId: string) {
     super(fastify, modelId);
@@ -123,7 +124,7 @@ export class LMStudioAdapter extends BaseModelAdapter {
    * Get model details
    * @returns Model details object
    */
-  getDetails(): Record<string, any> {
+  getDetails(): ModelDetails {
     return { ...this.details };
   }
 

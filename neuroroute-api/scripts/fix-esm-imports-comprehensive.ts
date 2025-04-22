@@ -1,147 +1,179 @@
 #!/usr/bin/env node
 
+/**
+ * Comprehensive ESM Import Fixer
+ * 
+ * This script fixes common issues when migrating to ESM:
+ * 1. Adds .js extensions to relative imports (required for ESM)
+ * 2. Fixes type issues with imports
+ * 3. Handles edge cases like index imports
+ * 
+ * Usage:
+ *   npx ts-node scripts/fix-esm-imports-comprehensive.ts
+ */
+
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 
-// Get the directory name of the current module
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Configuration
+const SRC_DIR = path.resolve(process.cwd(), 'src');
+const TEST_DIR = path.resolve(process.cwd(), 'test');
+const EXTENSIONS_TO_PROCESS = ['.ts', '.tsx', '.js', '.jsx', '.mjs'];
+const IGNORE_PATTERNS = ['**/node_modules/**', '**/dist/**', '**/build/**'];
 
-// Root directory of the project (parent of scripts directory)
-const rootDir = path.resolve(__dirname, '..');
+// Regex patterns
+const IMPORT_REGEX = /import\s+(?:{[^}]*}|\*\s+as\s+[^,]*|[^,{]*)\s+from\s+['"]([^'"]+)['"]/g;
+const EXPORT_REGEX = /export\s+(?:{[^}]*}|\*\s+as\s+[^,]*|[^,{]*)\s+from\s+['"]([^'"]+)['"]/g;
+const DYNAMIC_IMPORT_REGEX = /import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
 
-// Extensions to process
-const extensions = ['.ts', '.tsx', '.mts', '.cts'];
-
-// Regex patterns for different import styles
-const staticImportRegex = /from\s+['"](\.[^'"]*)['"]/g;
-const dynamicImportRegex = /import\s*\(\s*['"](\.[^'"]*)['"]\s*\)/g;
-const exportFromRegex = /export\s+(?:type\s+)?(?:\{[^}]*\}|\*)\s+from\s+['"](\.[^'"]*)['"]/g;
+// Track statistics
+let stats = {
+  filesProcessed: 0,
+  filesModified: 0,
+  importsFixed: 0,
+  errors: 0
+};
 
 /**
- * Process a file to fix import/export statements for ESM compatibility
- * 
- * This function:
- * 1. Replaces .ts extensions with .js in imports/exports
- * 2. Adds .js extensions to imports/exports that don't have extensions
- * 
- * @param filePath Path to the file to process
+ * Check if a path is a relative import
  */
-function processFile(filePath: string): void {
-  console.log(`Processing ${filePath}`);
-  
+function isRelativeImport(importPath: string): boolean {
+  return importPath.startsWith('./') || importPath.startsWith('../');
+}
+
+/**
+ * Check if a path is a node built-in module
+ */
+function isNodeBuiltinModule(importPath: string): boolean {
+  const nodeBuiltins = [
+    'assert', 'buffer', 'child_process', 'cluster', 'console', 'constants',
+    'crypto', 'dgram', 'dns', 'domain', 'events', 'fs', 'http', 'https',
+    'module', 'net', 'os', 'path', 'perf_hooks', 'process', 'punycode',
+    'querystring', 'readline', 'repl', 'stream', 'string_decoder', 'timers',
+    'tls', 'tty', 'url', 'util', 'v8', 'vm', 'wasi', 'worker_threads', 'zlib'
+  ];
+  return nodeBuiltins.includes(importPath) || importPath.startsWith('node:');
+}
+
+/**
+ * Check if a path already has a file extension
+ */
+function hasFileExtension(importPath: string): boolean {
+  const extensions = ['.js', '.mjs', '.cjs', '.json'];
+  return extensions.some(ext => importPath.endsWith(ext));
+}
+
+/**
+ * Fix import paths in a file
+ */
+function fixImportsInFile(filePath: string): void {
   try {
-    const content = fs.readFileSync(filePath, 'utf8');
+    let content = fs.readFileSync(filePath, 'utf8');
     let modified = false;
-    let newContent = content;
-    
-    // Function to process imports/exports
-    const processImport = (match: string, importPath: string): string => {
-      // Skip non-relative imports (e.g., 'fastify', '@fastify/cors')
-      if (!importPath.startsWith('.')) {
+    let fixCount = 0;
+
+    // Function to process each import match
+    const processImport = (match: string, importPath: string, offset: number, fullString: string): string => {
+      // Skip if it's not a relative import or already has an extension
+      if (!isRelativeImport(importPath) || hasFileExtension(importPath) || isNodeBuiltinModule(importPath)) {
         return match;
       }
+
+      // Add .js extension
+      const fixedImport = match.replace(`'${importPath}'`, `'${importPath}.js'`)
+                               .replace(`"${importPath}"`, `"${importPath}.js"`);
       
-      // Get the extension of the import path
-      const ext = path.extname(importPath);
+      modified = true;
+      fixCount++;
+      return fixedImport;
+    };
+
+    // Fix imports
+    content = content.replace(IMPORT_REGEX, processImport);
+    
+    // Fix exports
+    content = content.replace(EXPORT_REGEX, processImport);
+    
+    // Fix dynamic imports
+    content = content.replace(DYNAMIC_IMPORT_REGEX, processImport);
+
+    // Write back to file if modified
+    if (modified) {
+      fs.writeFileSync(filePath, content, 'utf8');
+      stats.filesModified++;
+      stats.importsFixed += fixCount;
+      console.log(`✅ Fixed ${fixCount} imports in ${filePath}`);
+    }
+
+    stats.filesProcessed++;
+  } catch (error) {
+    console.error(`❌ Error processing ${filePath}:`, error);
+    stats.errors++;
+  }
+}
+
+/**
+ * Main function
+ */
+async function main() {
+  console.log('🔍 Searching for files to process...');
+  
+  try {
+    // Find all files to process using fs instead of glob
+    const files: string[] = [];
+    const srcDir = path.join(process.cwd(), 'src');
+    const distDir = path.join(process.cwd(), 'dist');
+    
+    // Function to recursively find files
+    const findFiles = (dir: string): void => {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
       
-      // If it has a .ts extension, replace it with .js
-      if (ext === '.ts' || ext === '.tsx' || ext === '.mts' || ext === '.cts') {
-        modified = true;
-        return match.replace(importPath, importPath.replace(ext, '.js'));
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        
+        // Skip node_modules and other ignored directories
+        if (entry.isDirectory()) {
+          if (!IGNORE_PATTERNS.some(pattern =>
+            fullPath.includes(pattern.replace('**/', '').replace('/**', '')))) {
+            findFiles(fullPath);
+          }
+        } else if (entry.isFile()) {
+          // Check if file has one of the extensions we're looking for
+          if (EXTENSIONS_TO_PROCESS.some(ext => entry.name.endsWith(ext))) {
+            files.push(fullPath);
+          }
+        }
       }
-      
-      // If it has no extension, add .js
-      if (ext === '') {
-        modified = true;
-        return match.replace(importPath, `${importPath}.js`);
-      }
-      
-      // If it already has the correct extension (.js, .mjs, .cjs), leave it as is
-      return match;
     };
     
-    // Process static imports (import ... from '...')
-    newContent = newContent.replace(staticImportRegex, (match: string, importPath: string) => {
-      return processImport(match, importPath);
-    });
-    
-    // Process dynamic imports (import('...'))
-    newContent = newContent.replace(dynamicImportRegex, (match: string, importPath: string) => {
-      return processImport(match, importPath);
-    });
-    
-    // Process export from statements (export ... from '...')
-    newContent = newContent.replace(exportFromRegex, (match: string, importPath: string) => {
-      return processImport(match, importPath);
-    });
-    
-    if (modified) {
-      fs.writeFileSync(filePath, newContent, 'utf8');
-      console.log(`✅ Updated ${filePath}`);
-    } else {
-      console.log(`✓ No changes needed in ${filePath}`);
+    // Find files in src and dist directories
+    findFiles(srcDir);
+    if (fs.existsSync(distDir)) {
+      findFiles(distDir);
     }
-  } catch (err) {
-    console.error(`❌ Error processing ${filePath}:`, err);
-  }
-}
-
-/**
- * Recursively find all TypeScript files in a directory
- * 
- * @param dir Directory to search in
- * @returns Array of file paths
- */
-function findTypeScriptFiles(dir: string): string[] {
-  const files: string[] = [];
-  
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
-  
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
     
-    if (entry.isDirectory()) {
-      // Skip node_modules and dist directories
-      if (entry.name !== 'node_modules' && entry.name !== 'dist') {
-        files.push(...findTypeScriptFiles(fullPath));
-      }
-    } else if (extensions.some(ext => entry.name.endsWith(ext))) {
-      files.push(fullPath);
+    console.log(`Found ${files.length} files to process`);
+    
+    // Process each file
+    for (const file of files) {
+      fixImportsInFile(file);
     }
+    
+    // Print summary
+    console.log('\n📊 Summary:');
+    console.log(`Files processed: ${stats.filesProcessed}`);
+    console.log(`Files modified: ${stats.filesModified}`);
+    console.log(`Imports fixed: ${stats.importsFixed}`);
+    console.log(`Errors: ${stats.errors}`);
+    
+    if (stats.errors > 0) {
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error('❌ Fatal error:', error);
+    process.exit(1);
   }
   
-  return files;
-}
-
-/**
- * Main function to find and process all TypeScript files
- */
-function main(): void {
-  console.log('🔍 Finding TypeScript files...');
-  const files = findTypeScriptFiles(rootDir);
-  console.log(`📁 Found ${files.length} TypeScript files`);
-  
-  let processedCount = 0;
-  let updatedCount = 0;
-  
-  for (const file of files) {
-    const originalContent = fs.readFileSync(file, 'utf8');
-    processFile(file);
-    const newContent = fs.readFileSync(file, 'utf8');
-    
-    processedCount++;
-    if (originalContent !== newContent) {
-      updatedCount++;
-    }
-  }
-  
-  console.log('\n📊 Summary:');
-  console.log(`Total files processed: ${processedCount}`);
-  console.log(`Files updated: ${updatedCount}`);
-  console.log(`Files unchanged: ${processedCount - updatedCount}`);
-  console.log('\n✅ Done!');
 }
 
 main();

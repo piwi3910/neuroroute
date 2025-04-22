@@ -1,4 +1,4 @@
-import autocannon from 'autocannon';
+import autocannon, { Result, Options } from 'autocannon';
 import { FastifyInstance } from 'fastify';
 import fs from 'fs';
 import path from 'path';
@@ -62,7 +62,7 @@ async function runBenchmark(
   app: FastifyInstance,
   request: typeof benchmarkConfig.requests[0],
   connections: number
-): Promise<autocannon.Result> {
+): Promise<Result> {
   // Get the server address
   const address = app.server.address();
   if (!address || typeof address === 'string') {
@@ -70,7 +70,7 @@ async function runBenchmark(
   }
 
   // Configure the benchmark
-  const config: autocannon.Options = {
+  const config: Options = {
     url: `http://localhost:${address.port}`,
     connections,
     duration: benchmarkConfig.duration,
@@ -80,7 +80,7 @@ async function runBenchmark(
 
   // Run the benchmark
   return new Promise((resolve, reject) => {
-    autocannon(config, (err, result) => {
+    autocannon(config, (err: Error | null, result: any) => {
       if (err) {
         reject(err);
       } else {
@@ -124,7 +124,7 @@ async function runAllBenchmarks() {
     await app.listen({ port: 0, host: 'localhost' });
     
     // Store all results
-    const results: Record<string, Record<string, autocannon.Result>> = {};
+    const results: Record<string, Record<string, Result>> = {};
     
     // Run benchmarks for each request and connection count
     for (const request of benchmarkConfig.requests) {
@@ -167,7 +167,7 @@ async function runAllBenchmarks() {
  * 
  * @param results Benchmark results
  */
-function generateReport(results: Record<string, Record<string, autocannon.Result>>) {
+function generateReport(results: Record<string, Record<string, Result>>) {
   // Create a simple HTML report
   let html = `
     <!DOCTYPE html>

@@ -1,5 +1,7 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { registerPlugins, registerRoutes } from '../../src/app.js';
+import { AppConfig } from '../../src/config.js';
+import { PrismaClient } from '@prisma/client';
 
 /**
  * Options for building a test instance of the app
@@ -30,12 +32,12 @@ export async function build(options: BuildOptions = {}): Promise<FastifyInstance
 
   // Set environment variables
   if (options.env) {
-    app.decorate('config', options.env);
+    app.decorate('config', options.env as unknown as AppConfig);
   }
 
   // Mock Prisma client
   if (options.prisma) {
-    app.decorate('prisma', options.prisma);
+    app.decorate('prisma', options.prisma as unknown as PrismaClient);
   }
 
   // Register plugins with test configuration

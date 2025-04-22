@@ -452,6 +452,6 @@ declare module 'fastify' {
 
 export default fp(advancedCachePlugin, {
   name: 'advanced-cache',
-  fastify: '4.x',
-  dependencies: ['@fastify/redis'],
+  fastify: '5.x',
+  dependencies: ['redis'],
 });

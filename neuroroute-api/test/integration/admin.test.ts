@@ -4,6 +4,9 @@ import adminRoutes from '../../src/routes/admin.js';
 import { createUserService } from '../../src/services/user.js';
 import { createConfigManager } from '../../src/services/config-manager.js';
 import { createApiKeyService } from '../../src/services/api-key.js';
+import { PrismaClient } from '@prisma/client';
+import { AppConfig } from '../../src/config.js';
+import { MockedPrismaClient } from '../types/jest-prisma.js';
 
 describe('Admin API Endpoints', () => {
   let app: FastifyInstance;
@@ -22,7 +25,7 @@ describe('Admin API Endpoints', () => {
       JWT_SECRET: 'test-secret',
       JWT_EXPIRATION: '1h',
       ENABLE_JWT_AUTH: true
-    } as any);
+    } as unknown as AppConfig);
     
     // Mock Redis
     app.decorate('redis', {
@@ -31,8 +34,8 @@ describe('Admin API Endpoints', () => {
       del: jest.fn().mockResolvedValue(1)
     } as any);
     
-    // Mock Prisma
-    app.decorate('prisma', {
+    // Mock Prisma with proper type
+    const mockPrisma = {
       user: {
         findUnique: jest.fn(),
         findMany: jest.fn(),
@@ -78,7 +81,9 @@ describe('Admin API Endpoints', () => {
         delete: jest.fn()
       },
       $queryRaw: jest.fn().mockResolvedValue([{ '?column?': 1 }])
-    } as any);
+    } as unknown as PrismaClient;
+    
+    app.decorate('prisma', mockPrisma as unknown as PrismaClient);
     
     // Mock JWT
     app.decorate('jwt', {

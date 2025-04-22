@@ -1,118 +1,98 @@
 #!/usr/bin/env node
 
+/**
+ * Fix Double JS Extensions
+ * 
+ * This script fixes double .js extensions that might occur during ESM migration
+ * (e.g., './utils.js.js' -> './utils.js')
+ * 
+ * Usage:
+ *   npx ts-node scripts/fix-double-js-extensions.ts
+ */
+
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { glob } from 'glob';
 
-// Get the directory name of the current module
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Configuration
+const EXTENSIONS_TO_PROCESS = ['.ts', '.tsx', '.js', '.jsx', '.mjs'];
+const IGNORE_PATTERNS = ['**/node_modules/**', '**/dist/**', '**/build/**'];
 
-// Root directory of the project (parent of scripts directory)
-const rootDir = path.resolve(__dirname, '..');
+// Regex patterns
+const DOUBLE_JS_REGEX = /(['"])([^'"]+)\.js\.js(['"])/g;
 
-// Extensions to process
-const extensions = ['.ts', '.tsx', '.mts', '.cts', '.js', '.jsx', '.mjs', '.cjs'];
-
-// Regex to match double .js.js extensions in imports
-const doubleJsExtensionRegex = /from\s+['"](\.[^'"]*\.js\.js)['"]/g;
-const dynamicDoubleJsExtensionRegex = /import\s*\(\s*['"](\.[^'"]*\.js\.js)['"]\s*\)/g;
-const exportDoubleJsExtensionRegex = /export\s+(?:type\s+)?(?:\{[^}]*\}|\*)\s+from\s+['"](\.[^'"]*\.js\.js)['"]/g;
+// Track statistics
+let stats = {
+  filesProcessed: 0,
+  filesModified: 0,
+  importsFixed: 0,
+  errors: 0
+};
 
 /**
- * Process a file to fix double .js.js extensions in imports/exports
- * 
- * @param filePath Path to the file to process
+ * Fix double .js extensions in a file
  */
-function processFile(filePath: string): void {
-  console.log(`Processing ${filePath}`);
-  
+function fixDoubleExtensions(filePath: string): void {
   try {
-    const content = fs.readFileSync(filePath, 'utf8');
+    let content = fs.readFileSync(filePath, 'utf8');
     let modified = false;
-    let newContent = content;
-    
-    // Function to process imports/exports with double .js.js extensions
-    const processDoubleExtension = (match: string, importPath: string): string => {
-      // Replace .js.js with .js
+    let fixCount = 0;
+
+    // Fix double .js extensions
+    const newContent = content.replace(DOUBLE_JS_REGEX, (match, quote1, path, quote2) => {
       modified = true;
-      return match.replace(importPath, importPath.replace('.js.js', '.js'));
-    };
-    
-    // Process static imports (import ... from '...')
-    newContent = newContent.replace(doubleJsExtensionRegex, processDoubleExtension);
-    
-    // Process dynamic imports (import('...'))
-    newContent = newContent.replace(dynamicDoubleJsExtensionRegex, processDoubleExtension);
-    
-    // Process export from statements (export ... from '...')
-    newContent = newContent.replace(exportDoubleJsExtensionRegex, processDoubleExtension);
-    
+      fixCount++;
+      return `${quote1}${path}.js${quote2}`;
+    });
+
+    // Write back to file if modified
     if (modified) {
       fs.writeFileSync(filePath, newContent, 'utf8');
-      console.log(`✅ Fixed double .js.js extensions in ${filePath}`);
-    } else {
-      console.log(`✓ No double .js.js extensions found in ${filePath}`);
+      stats.filesModified++;
+      stats.importsFixed += fixCount;
+      console.log(`✅ Fixed ${fixCount} double extensions in ${filePath}`);
     }
-  } catch (err) {
-    console.error(`❌ Error processing ${filePath}:`, err);
+
+    stats.filesProcessed++;
+  } catch (error) {
+    console.error(`❌ Error processing ${filePath}:`, error);
+    stats.errors++;
   }
 }
 
 /**
- * Recursively find all files with specified extensions in a directory
- * 
- * @param dir Directory to search in
- * @returns Array of file paths
+ * Main function
  */
-function findFiles(dir: string): string[] {
-  const files: string[] = [];
+async function main() {
+  console.log('🔍 Searching for files to process...');
   
-  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  // Find all files to process
+  const files = await glob(`**/*{${EXTENSIONS_TO_PROCESS.join(',')}}`, {
+    cwd: process.cwd(),
+    ignore: IGNORE_PATTERNS,
+    absolute: true
+  });
   
-  for (const entry of entries) {
-    const fullPath = path.join(dir, entry.name);
-    
-    if (entry.isDirectory()) {
-      // Skip node_modules and dist directories
-      if (entry.name !== 'node_modules' && entry.name !== 'dist') {
-        files.push(...findFiles(fullPath));
-      }
-    } else if (extensions.some(ext => entry.name.endsWith(ext))) {
-      files.push(fullPath);
-    }
-  }
+  console.log(`Found ${files.length} files to process`);
   
-  return files;
-}
-
-/**
- * Main function to find and process all files
- */
-function main(): void {
-  console.log('🔍 Finding files to process...');
-  const files = findFiles(rootDir);
-  console.log(`📁 Found ${files.length} files to check for double .js.js extensions`);
-  
-  let processedCount = 0;
-  let fixedCount = 0;
-  
+  // Process each file
   for (const file of files) {
-    const originalContent = fs.readFileSync(file, 'utf8');
-    processFile(file);
-    const newContent = fs.readFileSync(file, 'utf8');
-    
-    processedCount++;
-    if (originalContent !== newContent) {
-      fixedCount++;
-    }
+    fixDoubleExtensions(file);
   }
   
+  // Print summary
   console.log('\n📊 Summary:');
-  console.log(`Total files processed: ${processedCount}`);
-  console.log(`Files with fixed double .js.js extensions: ${fixedCount}`);
-  console.log(`Files unchanged: ${processedCount - fixedCount}`);
-  console.log('\n✅ Done!');
+  console.log(`Files processed: ${stats.filesProcessed}`);
+  console.log(`Files modified: ${stats.filesModified}`);
+  console.log(`Double extensions fixed: ${stats.importsFixed}`);
+  console.log(`Errors: ${stats.errors}`);
+  
+  if (stats.errors > 0) {
+    process.exit(1);
+  }
 }
 
-main();
+main().catch(error => {
+  console.error('❌ Fatal error:', error);
+  process.exit(1);
+});

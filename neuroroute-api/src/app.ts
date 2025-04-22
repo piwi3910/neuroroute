@@ -40,15 +40,22 @@ declare module 'fastify' {
 export function createServer(): FastifyInstance {
   // Create Fastify instance
   const server: FastifyInstance = Fastify({
-    logger: logger.createLogger({
-      prettyPrint: true,
+    logger: {
+      level: 'info',
       redact: [
         'req.headers.authorization',
         'req.headers["x-api-key"]',
         'req.body.password',
         'req.body.apiKey',
-      ]
-    }),
+      ],
+      transport: {
+        target: 'pino-pretty',
+        options: {
+          translateTime: 'HH:MM:ss Z',
+          ignore: 'pid,hostname',
+        },
+      },
+    },
     // Add request ID to each request
     genReqId: (req) => {
       const requestId = req.headers['x-request-id'] as string;

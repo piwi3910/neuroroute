@@ -90,13 +90,13 @@ export class OpenAIAdapter extends BaseModelAdapter {
       }
       
       // Fall back to environment variable
-      const config = this.fastify.config as Record<string, string | undefined>;
+      const config = this.fastify.config;
       this.apiKey = config?.OPENAI_API_KEY ?? '';
     } catch (error) {
       this.fastify.log.error(error, 'Failed to load OpenAI API key');
       
       // Fall back to environment variable
-      const config = this.fastify.config as Record<string, string | undefined>;
+      const config = this.fastify.config;
       this.apiKey = config?.OPENAI_API_KEY ?? '';
     }
   }
@@ -321,10 +321,10 @@ export class OpenAIAdapter extends BaseModelAdapter {
     if (error.name === 'ModelError') {
       const modelError = error as unknown as { code: string };
       return [
-        ErrorType.MODEL_AUTHENTICATION,
-        ErrorType.MODEL_QUOTA_EXCEEDED,
-        ErrorType.MODEL_CONTENT_FILTERED
-      ].includes(modelError.code as ErrorType);
+        'MODEL_AUTHENTICATION',
+        'MODEL_QUOTA_EXCEEDED',
+        'MODEL_CONTENT_FILTERED'
+      ].includes(modelError.code);
     }
     
     return false;

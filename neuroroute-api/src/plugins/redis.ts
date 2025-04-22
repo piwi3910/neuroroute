@@ -1,5 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import fastifyRedis from '@fastify/redis';
+import fp from 'fastify-plugin';
 
 /**
  * Redis configuration plugin
@@ -59,4 +60,6 @@ declare module 'fastify' {
   }
 }
 
-export default redisPlugin;
+export default fp(redisPlugin, {
+  name: 'redis'
+});

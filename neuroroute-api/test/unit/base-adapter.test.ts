@@ -1,12 +1,16 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import { BaseModelAdapter, ModelResponse, ModelRequestOptions } from '../../src/models/base-adapter.js';
+import { BaseModelAdapter, ModelResponse, ModelRequestOptions, ModelDetails } from '../../src/models/base-adapter.js';
 
 // Create a concrete implementation of the abstract class for testing
 class TestModelAdapter extends BaseModelAdapter {
   public isAvailableMock = jest.fn().mockResolvedValue(true);
   public getCapabilitiesMock = jest.fn().mockReturnValue(['text-generation']);
-  public getDetailsMock = jest.fn().mockReturnValue({ provider: 'test' });
+  public getDetailsMock = jest.fn().mockReturnValue({
+    provider: 'test',
+    version: 'v1.0',
+    contextWindow: 4096
+  });
   public generateCompletionMock = jest.fn().mockResolvedValue({
     text: 'Test response',
     tokens: { prompt: 10, completion: 20, total: 30 },
@@ -27,7 +31,7 @@ class TestModelAdapter extends BaseModelAdapter {
     return this.getCapabilitiesMock();
   }
 
-  getDetails(): Record<string, any> {
+  getDetails(): ModelDetails {
     return this.getDetailsMock();
   }
 

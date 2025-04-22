@@ -4,7 +4,7 @@ import { ModelResponse } from '../../src/models/base-adapter.js';
 
 // Mock the model adapters
 jest.mock('../../src/models/openai-adapter.js', () => ({
-  default: jest.fn((fastify, modelId) => ({
+  default: jest.fn((fastify: any, modelId: string) => ({
     getModelId: () => modelId,
     provider: 'openai',
     getCapabilities: () => ['text-generation', 'code-generation', 'reasoning'],
@@ -26,12 +26,12 @@ jest.mock('../../src/models/openai-adapter.js', () => ({
         processingTime: 1.5
       } as ModelResponse;
     }),
-    countTokens: (text) => Math.ceil(text.length / 4)
+    countTokens: (text: string) => Math.ceil(text.length / 4)
   }))
 }));
 
 jest.mock('../../src/models/anthropic-adapter.js', () => ({
-  default: jest.fn((fastify, modelId) => ({
+  default: jest.fn((fastify: any, modelId: string) => ({
     getModelId: () => modelId,
     provider: 'anthropic',
     getCapabilities: () => ['text-generation', 'code-generation', 'reasoning'],
@@ -41,7 +41,7 @@ jest.mock('../../src/models/anthropic-adapter.js', () => ({
       contextWindow: 100000
     }),
     isAvailable: jest.fn().mockResolvedValue(true),
-    generateCompletion: jest.fn().mockImplementation(async (prompt) => {
+    generateCompletion: jest.fn().mockImplementation(async (prompt: string) => {
       return {
         text: `Anthropic response for: ${prompt}`,
         tokens: {
@@ -53,7 +53,7 @@ jest.mock('../../src/models/anthropic-adapter.js', () => ({
         processingTime: 2.0
       } as ModelResponse;
     }),
-    countTokens: (text) => Math.ceil(text.length / 4)
+    countTokens: (text: string) => Math.ceil(text.length / 4)
   }))
 }));
 
@@ -156,7 +156,7 @@ describe('Complete Request Flow Integration Tests', () => {
     it('should use fallback model when primary model is unavailable', async () => {
       // Mock the OpenAI adapter to be unavailable
       const openaiAdapter = require('../../src/models/openai-adapter.js').default;
-      openaiAdapter.mockImplementation((fastify, modelId) => ({
+      openaiAdapter.mockImplementation((fastify: any, modelId: string) => ({
         getModelId: () => modelId,
         provider: 'openai',
         getCapabilities: () => ['text-generation', 'code-generation', 'reasoning'],
@@ -167,7 +167,7 @@ describe('Complete Request Flow Integration Tests', () => {
         }),
         isAvailable: jest.fn().mockResolvedValue(false), // Not available
         generateCompletion: jest.fn().mockRejectedValue(new Error('Model unavailable')),
-        countTokens: (text) => Math.ceil(text.length / 4)
+        countTokens: (text: string) => Math.ceil(text.length / 4)
       }));
 
       // Make a request to the prompt endpoint
@@ -277,7 +277,7 @@ describe('Complete Request Flow Integration Tests', () => {
     it('should handle model errors gracefully', async () => {
       // Mock the OpenAI adapter to throw an error
       const openaiAdapter = require('../../src/models/openai-adapter.js').default;
-      openaiAdapter.mockImplementation((fastify, modelId) => ({
+      openaiAdapter.mockImplementation((fastify: any, modelId: string) => ({
         getModelId: () => modelId,
         provider: 'openai',
         getCapabilities: () => ['text-generation', 'code-generation', 'reasoning'],
@@ -288,7 +288,7 @@ describe('Complete Request Flow Integration Tests', () => {
         }),
         isAvailable: jest.fn().mockResolvedValue(true),
         generateCompletion: jest.fn().mockRejectedValue(new Error('API error')),
-        countTokens: (text) => Math.ceil(text.length / 4)
+        countTokens: (text: string) => Math.ceil(text.length / 4)
       }));
 
       // Make a request to the prompt endpoint

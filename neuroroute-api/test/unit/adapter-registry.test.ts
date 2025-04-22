@@ -4,21 +4,21 @@ import { BaseModelAdapter } from '../../src/models/base-adapter.js';
 
 // Mock the model adapters
 vi.mock('../../src/models/openai-adapter.js', () => ({
-  default: vi.fn((fastify, modelId) => ({
+  default: vi.fn((fastify: any, modelId: string) => ({
     getModelId: () => modelId,
     provider: 'openai'
   }))
 }));
 
 vi.mock('../../src/models/anthropic-adapter.js', () => ({
-  default: vi.fn((fastify, modelId) => ({
+  default: vi.fn((fastify: any, modelId: string) => ({
     getModelId: () => modelId,
     provider: 'anthropic'
   }))
 }));
 
 vi.mock('../../src/models/lmstudio-adapter.js', () => ({
-  default: vi.fn((fastify, modelId) => ({
+  default: vi.fn((fastify: any, modelId: string) => ({
     getModelId: () => modelId,
     provider: 'lmstudio'
   }))
@@ -44,19 +44,19 @@ describe('Adapter Registry', () => {
   it('should return OpenAI adapter for GPT models', () => {
     const adapter = getModelAdapter(mockFastify, 'gpt-4');
     expect(adapter.getModelId()).toBe('gpt-4');
-    expect(adapter.provider).toBe('openai');
+    expect((adapter as any).provider).toBe('openai');
   });
 
   it('should return Anthropic adapter for Claude models', () => {
     const adapter = getModelAdapter(mockFastify, 'claude-3-opus');
     expect(adapter.getModelId()).toBe('claude-3-opus');
-    expect(adapter.provider).toBe('anthropic');
+    expect((adapter as any).provider).toBe('anthropic');
   });
 
   it('should return LMStudio adapter for local models', () => {
     const adapter = getModelAdapter(mockFastify, 'lmstudio-local');
     expect(adapter.getModelId()).toBe('lmstudio-local');
-    expect(adapter.provider).toBe('lmstudio');
+    expect((adapter as any).provider).toBe('lmstudio');
   });
 
   it('should cache adapters and reuse them', () => {
@@ -75,6 +75,6 @@ describe('Adapter Registry', () => {
   it('should default to OpenAI adapter for unknown models', () => {
     const adapter = getModelAdapter(mockFastify, 'unknown-model');
     expect(adapter.getModelId()).toBe('unknown-model');
-    expect(adapter.provider).toBe('openai');
+    expect((adapter as any).provider).toBe('openai');
   });
 });
