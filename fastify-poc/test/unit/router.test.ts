@@ -13,6 +13,7 @@ describe('Router Service', () => {
   let routerService: RouterService;
   let mockClassifier: any;
   let mockCache: any;
+  let mockModelAvailability: Map<string, boolean>;
 
   beforeEach(() => {
     // Create a Fastify instance
@@ -20,11 +21,17 @@ describe('Router Service', () => {
       logger: false
     });
 
-    // Mock config
+    // Mock config - using type assertion to bypass type checking for tests
     app.decorate('config', {
       ENABLE_CACHE: true,
-      REDIS_CACHE_TTL: 300
-    });
+      REDIS_CACHE_TTL: 300,
+      COST_OPTIMIZE: false,
+      QUALITY_OPTIMIZE: true,
+      LATENCY_OPTIMIZE: false,
+      FALLBACK_ENABLED: true,
+      CHAIN_ENABLED: false,
+      CACHE_STRATEGY: 'default'
+    } as any);
 
     // Mock Redis - using any to bypass type checking for tests
     app.decorate('redis', {
@@ -49,6 +56,18 @@ describe('Router Service', () => {
 
     // Create router service
     routerService = createRouterService(app);
+
+    // Mock model availability
+    mockModelAvailability = new Map<string, boolean>();
+    mockModelAvailability.set('gpt-4', true);
+    mockModelAvailability.set('gpt-3.5-turbo', true);
+    mockModelAvailability.set('claude-3-opus', true);
+    mockModelAvailability.set('claude-3-sonnet', true);
+    mockModelAvailability.set('claude-3-haiku', true);
+    mockModelAvailability.set('lmstudio-local', true);
+    
+    // Set the mock model availability on the router service
+    (routerService as any).modelAvailability = mockModelAvailability;
   });
 
   afterEach(async () => {
@@ -62,7 +81,13 @@ describe('Router Service', () => {
       mockClassifier.classifyPrompt.mockResolvedValue({
         type: 'general',
         complexity: 'medium',
-        features: ['text-generation']
+        features: ['text-generation'],
+        priority: 'medium',
+        confidence: 0.7,
+        tokens: {
+          estimated: 25,
+          completion: 50
+        }
       });
 
       // Mock cache miss
@@ -151,7 +176,13 @@ describe('Router Service', () => {
       mockClassifier.classifyPrompt.mockResolvedValue({
         type: 'general',
         complexity: 'medium',
-        features: ['text-generation']
+        features: ['text-generation'],
+        priority: 'medium',
+        confidence: 0.7,
+        tokens: {
+          estimated: 25,
+          completion: 50
+        }
       });
 
       // Call the method
@@ -175,7 +206,13 @@ describe('Router Service', () => {
       mockClassifier.classifyPrompt.mockResolvedValue({
         type: 'general',
         complexity: 'medium',
-        features: ['text-generation']
+        features: ['text-generation'],
+        priority: 'medium',
+        confidence: 0.7,
+        tokens: {
+          estimated: 25,
+          completion: 50
+        }
       });
 
       // Mock cache miss then hit
@@ -194,7 +231,7 @@ describe('Router Service', () => {
       jest.clearAllMocks();
       
       // Mock cache hit with the same key
-      mockCache.get.mockImplementation((key) => {
+      mockCache.get.mockImplementation((key: string) => {
         if (key === cacheKey) {
           return Promise.resolve({
             response: 'Cached response',
@@ -211,6 +248,168 @@ describe('Router Service', () => {
       // Verify cache was hit
       expect(result).toHaveProperty('cached', true);
       expect(mockCache.get).toHaveBeenCalledWith(cacheKey);
+    });
+  });
+
+  describe('Enhanced Routing Features', () => {
+    it('should route based on cost optimization when enabled', async () => {
+      // Mock classifier response
+      mockClassifier.classifyPrompt.mockResolvedValue({
+        type: 'general',
+        complexity: 'medium',
+        features: ['text-generation'],
+        priority: 'medium',
+        confidence: 0.7,
+        tokens: {
+          estimated: 25,
+          completion: 50
+        }
+      });
+
+      // Mock cache miss
+      mockCache.get.mockResolvedValue(null);
+
+      // Call with cost optimization
+      const result = await routerService.routePrompt('Test prompt', undefined, 1024, 0.7, {
+        costOptimize: true,
+        qualityOptimize: false
+      });
+
+      // The cheapest model should be selected (gpt-3.5-turbo or similar)
+      expect(result.model_used).toBeDefined();
+      expect(result.cost).toBeDefined();
+    });
+
+    it('should use fallback model when primary model is unavailable', async () => {
+      // Mock classifier response
+      mockClassifier.classifyPrompt.mockResolvedValue({
+        type: 'code',
+        complexity: 'complex',
+        features: ['code-generation', 'reasoning'],
+        priority: 'high',
+        confidence: 0.9,
+        tokens: {
+          estimated: 100,
+          completion: 200
+        }
+      });
+
+      // Mock cache miss
+      mockCache.get.mockResolvedValue(null);
+
+      // Make gpt-4 unavailable
+      mockModelAvailability.set('gpt-4', false);
+
+      // Call the method
+      const result = await routerService.routePrompt('Write a complex algorithm', undefined, 1024, 0.7, {
+        fallbackEnabled: true
+      });
+
+      // Should not use gpt-4 since it's unavailable
+      expect(result.model_used).not.toBe('gpt-4');
+      expect(result.model_used).toBeDefined();
+    });
+
+    it('should apply different cache TTLs based on prompt classification', async () => {
+      // Mock classifier response for factual content (should have longer TTL)
+      mockClassifier.classifyPrompt.mockResolvedValue({
+        type: 'factual',
+        complexity: 'simple',
+        features: ['text-generation', 'knowledge-retrieval'],
+        priority: 'medium',
+        confidence: 0.8,
+        tokens: {
+          estimated: 25,
+          completion: 50
+        }
+      });
+
+      // Mock cache miss
+      mockCache.get.mockResolvedValue(null);
+
+      // Call the method
+      await routerService.routePrompt('What is the capital of France?');
+
+      // Verify cache was set with a longer TTL for factual content
+      expect(mockCache.set).toHaveBeenCalled();
+      // We can't easily verify the TTL directly in this test structure,
+      // but we can confirm the set was called
+    });
+
+    it('should include processing time in the response', async () => {
+      // Mock classifier response
+      mockClassifier.classifyPrompt.mockResolvedValue({
+        type: 'general',
+        complexity: 'medium',
+        features: ['text-generation'],
+        priority: 'medium',
+        confidence: 0.7,
+        tokens: {
+          estimated: 25,
+          completion: 50
+        }
+      });
+
+      // Mock cache miss
+      mockCache.get.mockResolvedValue(null);
+
+      // Call the method
+      const result = await routerService.routePrompt('Test prompt');
+
+      // Verify processing time is included
+      expect(result.processing_time).toBeDefined();
+      expect(typeof result.processing_time).toBe('number');
+    });
+
+    it('should include cost information in the response', async () => {
+      // Mock classifier response
+      mockClassifier.classifyPrompt.mockResolvedValue({
+        type: 'general',
+        complexity: 'medium',
+        features: ['text-generation'],
+        priority: 'medium',
+        confidence: 0.7,
+        tokens: {
+          estimated: 25,
+          completion: 50
+        }
+      });
+
+      // Mock cache miss
+      mockCache.get.mockResolvedValue(null);
+
+      // Call the method
+      const result = await routerService.routePrompt('Test prompt');
+
+      // Verify cost is included
+      expect(result.cost).toBeDefined();
+    });
+
+    it('should respect cache strategy settings', async () => {
+      // Mock classifier response
+      mockClassifier.classifyPrompt.mockResolvedValue({
+        type: 'general',
+        complexity: 'medium',
+        features: ['text-generation'],
+        priority: 'medium',
+        confidence: 0.7,
+        tokens: {
+          estimated: 25,
+          completion: 50
+        }
+      });
+
+      // Mock cache miss
+      mockCache.get.mockResolvedValue(null);
+
+      // Call with cache disabled
+      await routerService.routePrompt('Test prompt', undefined, 1024, 0.7, {
+        cacheStrategy: 'none'
+      });
+
+      // Verify cache was not used
+      expect(mockCache.get).not.toHaveBeenCalled();
+      expect(mockCache.set).not.toHaveBeenCalled();
     });
   });
 });

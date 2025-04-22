@@ -147,11 +147,83 @@ export class ApiKeyService {
     
     return `nr_${key}`;
   }
+
+  /**
+   * Get all API keys
+   *
+   * @returns Array of all API keys
+   */
+  async getAllApiKeys(): Promise<any[]> {
+    try {
+      const apiKeys = await this.fastify.prisma.apiKey.findMany({
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          permissions: true,
+          enabled: true,
+          expiresAt: true,
+          createdAt: true,
+          lastUsedAt: true,
+          usageCount: true
+        }
+      });
+      
+      return apiKeys.map((key: any) => ({
+        ...key,
+        // Don't include the actual key value for security
+        key: key.id.substring(0, 8) + '...'
+      }));
+    } catch (error) {
+      this.fastify.log.error(error, 'Error getting all API keys');
+      return [];
+    }
+  }
+
+  /**
+   * Create a new API key with more options
+   *
+   * @param options API key creation options
+   * @returns Created API key
+   */
+  async createApiKey(options: {
+    name: string;
+    description?: string;
+    permissions?: string[];
+    expiresAt?: Date;
+  }) {
+    return this.createKey(
+      options.name,
+      options.description,
+      options.permissions,
+      options.expiresAt
+    );
+  }
+
+  /**
+   * Revoke an API key
+   *
+   * @param id API key ID
+   * @returns True if revocation was successful
+   */
+  async revokeApiKey(id: string): Promise<boolean> {
+    try {
+      await this.fastify.prisma.apiKey.update({
+        where: { id },
+        data: { enabled: false }
+      });
+      
+      return true;
+    } catch (error) {
+      this.fastify.log.error(error, `Error revoking API key: ${id}`);
+      return false;
+    }
+  }
 }
 
 /**
  * Factory function to create an API key service
- * 
+ *
  * @param fastify Fastify instance
  * @returns API key service
  */

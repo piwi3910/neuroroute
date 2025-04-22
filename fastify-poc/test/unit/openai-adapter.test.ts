@@ -18,10 +18,10 @@ describe('OpenAI Adapter', () => {
       logger: false
     });
 
-    // Mock config
+    // Mock config - using type assertion to bypass type checking for tests
     app.decorate('config', {
       OPENAI_API_KEY: 'test-api-key'
-    });
+    } as any);
 
     // Create adapter
     adapter = createOpenAIAdapter(app, 'gpt-4');
@@ -60,7 +60,7 @@ describe('OpenAI Adapter', () => {
     it('should return false if API key is not available', async () => {
       // Create app without API key
       const appWithoutKey = Fastify({ logger: false });
-      appWithoutKey.decorate('config', {});
+      appWithoutKey.decorate('config', {} as any);
       
       // Create adapter
       const adapterWithoutKey = createOpenAIAdapter(appWithoutKey, 'gpt-4');
@@ -167,7 +167,7 @@ describe('OpenAI Adapter', () => {
     it('should throw an error if API key is not configured', async () => {
       // Create app without API key
       const appWithoutKey = Fastify({ logger: false });
-      appWithoutKey.decorate('config', {});
+      appWithoutKey.decorate('config', {} as any);
       
       // Create adapter
       const adapterWithoutKey = createOpenAIAdapter(appWithoutKey, 'gpt-4');

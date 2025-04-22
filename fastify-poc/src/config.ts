@@ -11,6 +11,9 @@ export type NodeEnv = 'development' | 'test' | 'production';
 // Define log level types
 export type LogLevel = 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace';
 
+// Define cache strategy types
+export type CacheStrategy = 'default' | 'aggressive' | 'minimal' | 'none';
+
 // Define configuration schema
 export interface AppConfig {
   // Server configuration
@@ -28,6 +31,12 @@ export interface AppConfig {
   // API keys
   OPENAI_API_KEY?: string;
   ANTHROPIC_API_KEY?: string;
+  LMSTUDIO_URL?: string;
+  LMSTUDIO_TIMEOUT?: number;
+  
+  // Authentication
+  JWT_SECRET: string;
+  JWT_EXPIRATION: string; // e.g., '1h', '7d'
   
   // Logging
   LOG_LEVEL: LogLevel;
@@ -39,6 +48,18 @@ export interface AppConfig {
   // Feature flags
   ENABLE_CACHE: boolean;
   ENABLE_SWAGGER: boolean;
+  ENABLE_JWT_AUTH: boolean;
+  ENABLE_DYNAMIC_CONFIG: boolean;
+  ENABLE_METRICS: boolean;
+  ENABLE_TRACING: boolean;
+  
+  // Enhanced routing options
+  COST_OPTIMIZE: boolean;
+  QUALITY_OPTIMIZE: boolean;
+  LATENCY_OPTIMIZE: boolean;
+  FALLBACK_ENABLED: boolean;
+  CHAIN_ENABLED: boolean;
+  CACHE_STRATEGY: CacheStrategy;
 }
 
 // Environment-specific configurations
@@ -75,6 +96,20 @@ export const defaultConfig: AppConfig = {
   API_TIMEOUT: 30000, // 30 seconds
   ENABLE_CACHE: true,
   ENABLE_SWAGGER: true,
+  JWT_SECRET: 'development-jwt-secret-change-in-production',
+  JWT_EXPIRATION: '1h',
+  ENABLE_JWT_AUTH: true,
+  ENABLE_DYNAMIC_CONFIG: true,
+  ENABLE_METRICS: true,
+  ENABLE_TRACING: true,
+  
+  // Enhanced routing defaults
+  COST_OPTIMIZE: false,
+  QUALITY_OPTIMIZE: true,
+  LATENCY_OPTIMIZE: false,
+  FALLBACK_ENABLED: true,
+  CHAIN_ENABLED: false,
+  CACHE_STRATEGY: 'default',
 };
 
 // Environment schema for @fastify/env plugin
@@ -113,6 +148,22 @@ export const envSchema = {
     ANTHROPIC_API_KEY: {
       type: 'string',
     },
+    LMSTUDIO_URL: {
+      type: 'string',
+      default: 'http://localhost:1234/v1',
+    },
+    LMSTUDIO_TIMEOUT: {
+      type: 'number',
+      default: 60000,
+    },
+    JWT_SECRET: {
+      type: 'string',
+      default: 'development-jwt-secret-change-in-production',
+    },
+    JWT_EXPIRATION: {
+      type: 'string',
+      default: '1h',
+    },
     LOG_LEVEL: {
       type: 'string',
       enum: ['fatal', 'error', 'warn', 'info', 'debug', 'trace'],
@@ -133,6 +184,47 @@ export const envSchema = {
     ENABLE_SWAGGER: {
       type: 'boolean',
       default: true,
+    },
+    ENABLE_JWT_AUTH: {
+      type: 'boolean',
+      default: true,
+    },
+    ENABLE_DYNAMIC_CONFIG: {
+      type: 'boolean',
+      default: true,
+    },
+    ENABLE_METRICS: {
+      type: 'boolean',
+      default: true,
+    },
+    ENABLE_TRACING: {
+      type: 'boolean',
+      default: true,
+    },
+    COST_OPTIMIZE: {
+      type: 'boolean',
+      default: false,
+    },
+    QUALITY_OPTIMIZE: {
+      type: 'boolean',
+      default: true,
+    },
+    LATENCY_OPTIMIZE: {
+      type: 'boolean',
+      default: false,
+    },
+    FALLBACK_ENABLED: {
+      type: 'boolean',
+      default: true,
+    },
+    CHAIN_ENABLED: {
+      type: 'boolean',
+      default: false,
+    },
+    CACHE_STRATEGY: {
+      type: 'string',
+      enum: ['default', 'aggressive', 'minimal', 'none'],
+      default: 'default',
     },
   },
 };
@@ -166,11 +258,27 @@ export function getConfig(): AppConfig {
     REDIS_CACHE_TTL: process.env.REDIS_CACHE_TTL ? parseInt(process.env.REDIS_CACHE_TTL, 10) : envConfig.REDIS_CACHE_TTL,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+    LMSTUDIO_URL: process.env.LMSTUDIO_URL || envConfig.LMSTUDIO_URL,
+    LMSTUDIO_TIMEOUT: process.env.LMSTUDIO_TIMEOUT ? parseInt(process.env.LMSTUDIO_TIMEOUT, 10) : envConfig.LMSTUDIO_TIMEOUT,
+    JWT_SECRET: process.env.JWT_SECRET || envConfig.JWT_SECRET,
+    JWT_EXPIRATION: process.env.JWT_EXPIRATION || envConfig.JWT_EXPIRATION,
     LOG_LEVEL: (process.env.LOG_LEVEL as LogLevel) || envConfig.LOG_LEVEL,
     API_RATE_LIMIT: process.env.API_RATE_LIMIT ? parseInt(process.env.API_RATE_LIMIT, 10) : envConfig.API_RATE_LIMIT,
     API_TIMEOUT: process.env.API_TIMEOUT ? parseInt(process.env.API_TIMEOUT, 10) : envConfig.API_TIMEOUT,
     ENABLE_CACHE: process.env.ENABLE_CACHE ? process.env.ENABLE_CACHE === 'true' : envConfig.ENABLE_CACHE,
     ENABLE_SWAGGER: process.env.ENABLE_SWAGGER ? process.env.ENABLE_SWAGGER === 'true' : envConfig.ENABLE_SWAGGER,
+    ENABLE_JWT_AUTH: process.env.ENABLE_JWT_AUTH ? process.env.ENABLE_JWT_AUTH === 'true' : envConfig.ENABLE_JWT_AUTH,
+    ENABLE_DYNAMIC_CONFIG: process.env.ENABLE_DYNAMIC_CONFIG ? process.env.ENABLE_DYNAMIC_CONFIG === 'true' : envConfig.ENABLE_DYNAMIC_CONFIG,
+    ENABLE_METRICS: process.env.ENABLE_METRICS ? process.env.ENABLE_METRICS === 'true' : envConfig.ENABLE_METRICS,
+    ENABLE_TRACING: process.env.ENABLE_TRACING ? process.env.ENABLE_TRACING === 'true' : envConfig.ENABLE_TRACING,
+    
+    // Enhanced routing options
+    COST_OPTIMIZE: process.env.COST_OPTIMIZE ? process.env.COST_OPTIMIZE === 'true' : envConfig.COST_OPTIMIZE,
+    QUALITY_OPTIMIZE: process.env.QUALITY_OPTIMIZE ? process.env.QUALITY_OPTIMIZE === 'true' : envConfig.QUALITY_OPTIMIZE,
+    LATENCY_OPTIMIZE: process.env.LATENCY_OPTIMIZE ? process.env.LATENCY_OPTIMIZE === 'true' : envConfig.LATENCY_OPTIMIZE,
+    FALLBACK_ENABLED: process.env.FALLBACK_ENABLED ? process.env.FALLBACK_ENABLED === 'true' : envConfig.FALLBACK_ENABLED,
+    CHAIN_ENABLED: process.env.CHAIN_ENABLED ? process.env.CHAIN_ENABLED === 'true' : envConfig.CHAIN_ENABLED,
+    CACHE_STRATEGY: (process.env.CACHE_STRATEGY as CacheStrategy) || envConfig.CACHE_STRATEGY,
   };
 }
 

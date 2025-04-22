@@ -8,13 +8,13 @@ describe('Health Endpoint', () => {
   beforeEach(async () => {
     app = Fastify();
     
-    // Mock config for testing
+    // Mock config for testing - using type assertion to bypass type checking
     app.decorate('config', {
       ENABLE_CACHE: true,
       ENABLE_SWAGGER: true,
       NODE_ENV: 'test',
       REDIS_CACHE_TTL: 300,
-    });
+    } as any);
     
     // Mock Redis for testing
     app.decorate('redis', {

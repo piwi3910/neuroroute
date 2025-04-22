@@ -13,6 +13,16 @@ export interface ModelResponse {
   raw?: any; // Raw response from the provider
 }
 
+// Streaming chunk interface
+export interface StreamingChunk {
+  chunk: string;
+  done: boolean;
+  model: string;
+  finishReason?: string;
+  error?: boolean;
+  errorDetails?: string;
+}
+
 // Model request options
 export interface ModelRequestOptions {
   maxTokens?: number;
@@ -21,6 +31,7 @@ export interface ModelRequestOptions {
   frequencyPenalty?: number;
   presencePenalty?: number;
   stop?: string[];
+  stream?: boolean;
 }
 
 // Base model adapter interface
@@ -71,6 +82,25 @@ export abstract class BaseModelAdapter {
   ): Promise<ModelResponse>;
 
   /**
+   * Generate a streaming completion for a prompt
+   * @param prompt The prompt to complete
+   * @param options Request options
+   * @yields Streaming chunks of the response
+   */
+  generateCompletionStream?(
+    prompt: string,
+    options?: ModelRequestOptions
+  ): AsyncGenerator<StreamingChunk, void, unknown>;
+
+  /**
+   * Check if the model supports streaming
+   * @returns True if the model supports streaming
+   */
+  supportsStreaming(): boolean {
+    return typeof this.generateCompletionStream === 'function';
+  }
+
+  /**
    * Count tokens in a text
    * @param text The text to count tokens for
    * @returns The token count
@@ -105,6 +135,21 @@ export abstract class BaseModelAdapter {
         processingTime: response.processingTime,
       },
       'Model response'
+    );
+  }
+
+  /**
+   * Log a streaming chunk
+   * @param chunk The streaming chunk
+   */
+  protected logStreamingChunk(chunk: StreamingChunk): void {
+    this.fastify.log.debug(
+      {
+        modelId: this.modelId,
+        chunkLength: chunk.chunk.length,
+        done: chunk.done,
+      },
+      'Streaming chunk'
     );
   }
 }

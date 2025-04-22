@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import axios from 'axios';
-import { BaseModelAdapter, ModelResponse, ModelRequestOptions } from './base-adapter';
+import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk } from './base-adapter';
 
 // Anthropic API response interface
 interface AnthropicResponse {
@@ -98,6 +98,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
         max_tokens: options?.maxTokens || 1024,
         temperature: options?.temperature || 0.7,
         top_p: options?.topP || 1,
+        stream: false
       };
 
       // Make request to Anthropic API
@@ -162,6 +163,133 @@ export class AnthropicAdapter extends BaseModelAdapter {
   countTokens(text: string): number {
     // Simple approximation: 1 token ≈ 4 characters
     return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * Generate a streaming completion for a prompt
+   * @param prompt The prompt to complete
+   * @param options Request options
+   * @yields Streaming chunks of the response
+   */
+  async *generateCompletionStream(
+    prompt: string,
+    options?: ModelRequestOptions
+  ): AsyncGenerator<StreamingChunk, void, unknown> {
+    const startTime = Date.now();
+    this.logRequest(prompt, { ...options, stream: true });
+
+    try {
+      // Check if API key is available
+      if (!this.apiKey) {
+        throw new Error('Anthropic API key not configured');
+      }
+
+      // Prepare request
+      const requestOptions = {
+        model: this.modelId,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: options?.maxTokens || 1024,
+        temperature: options?.temperature || 0.7,
+        top_p: options?.topP || 1,
+        stream: true
+      };
+
+      // Make request to Anthropic API
+      const response = await axios.post(
+        `${this.baseUrl}/messages`,
+        requestOptions,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': this.apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          responseType: 'stream'
+        }
+      );
+
+      // Process the streaming response
+      const stream = response.data;
+      let buffer = '';
+      let stopReason: string | undefined;
+
+      for await (const chunk of stream) {
+        const lines = (buffer + chunk.toString()).split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+          if (line.trim() === 'data: [DONE]') {
+            const finalChunk: StreamingChunk = {
+              chunk: '',
+              done: true,
+              model: this.modelId,
+              finishReason: stopReason
+            };
+            this.logStreamingChunk(finalChunk);
+            yield finalChunk;
+            return;
+          }
+
+          try {
+            const data = JSON.parse(line.replace(/^data: /, ''));
+            
+            if (data.type === 'content_block_delta') {
+              const content = data.delta?.text || '';
+              
+              const streamingChunk: StreamingChunk = {
+                chunk: content,
+                done: false,
+                model: this.modelId
+              };
+
+              this.logStreamingChunk(streamingChunk);
+              yield streamingChunk;
+            } else if (data.type === 'message_stop') {
+              stopReason = data.stop_reason;
+              
+              const finalChunk: StreamingChunk = {
+                chunk: '',
+                done: true,
+                model: this.modelId,
+                finishReason: stopReason
+              };
+              
+              this.logStreamingChunk(finalChunk);
+              yield finalChunk;
+            }
+          } catch (error) {
+            // Skip invalid JSON
+            this.fastify.log.error(`Error parsing streaming response: ${error}`);
+          }
+        }
+      }
+
+      // Final chunk if not already sent
+      const finalChunk: StreamingChunk = {
+        chunk: '',
+        done: true,
+        model: this.modelId,
+        finishReason: stopReason || 'stop'
+      };
+      this.logStreamingChunk(finalChunk);
+      yield finalChunk;
+
+    } catch (error) {
+      this.fastify.log.error(error, `Anthropic streaming API error for model ${this.modelId}`);
+      
+      // Yield error chunk
+      const errorChunk: StreamingChunk = {
+        chunk: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        done: true,
+        model: this.modelId,
+        error: true,
+        errorDetails: error instanceof Error ? error.message : 'Unknown error'
+      };
+      
+      this.logStreamingChunk(errorChunk);
+      yield errorChunk;
+    }
   }
 }
 

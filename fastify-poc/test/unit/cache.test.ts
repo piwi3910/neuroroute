@@ -22,11 +22,11 @@ describe('Cache Service', () => {
       info: jest.fn()
     };
 
-    // Mock config
+    // Mock config - using type assertion to bypass type checking for tests
     app.decorate('config', {
       ENABLE_CACHE: true,
       REDIS_CACHE_TTL: 300
-    });
+    } as any);
 
     // Decorate app with Redis
     app.decorate('redis', mockRedis);

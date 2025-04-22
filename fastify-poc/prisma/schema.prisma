@@ -71,3 +71,98 @@ model RequestLog {
   
   @@map("request_logs")
 }
+
+// Users
+model User {
+  id              String           @id @default(uuid())
+  username        String           @unique
+  email           String           @unique
+  passwordHash    String           @map("password_hash")
+  passwordSalt    String           @map("password_salt")
+  enabled         Boolean          @default(true)
+  lastLoginAt     DateTime?        @map("last_login_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  userRoles       UserRole[]
+  userPermissions UserPermission[]
+  
+  @@map("users")
+}
+
+// Roles
+model Role {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String?
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  userRoles   UserRole[]
+  
+  @@map("roles")
+}
+
+// User-Role relationships
+model UserRole {
+  id        String   @id @default(uuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String   @map("user_id")
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId    String   @map("role_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, roleId])
+  @@map("user_roles")
+}
+
+// Permissions
+model Permission {
+  id              String           @id @default(uuid())
+  name            String           @unique
+  description     String?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  userPermissions UserPermission[]
+  
+  @@map("permissions")
+}
+
+// User-Permission relationships
+model UserPermission {
+  id           String     @id @default(uuid())
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String     @map("user_id")
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  permissionId String     @map("permission_id")
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@unique([userId, permissionId])
+  @@map("user_permissions")
+}
+
+// Dynamic configuration
+model Config {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("configs")
+}
+
+// Model usage statistics
+model ModelUsage {
+  id             String   @id @default(uuid())
+  modelId        String   @map("model_id")
+  provider       String
+  promptTokens   Int      @map("prompt_tokens")
+  outputTokens   Int      @map("output_tokens")
+  totalTokens    Int      @map("total_tokens")
+  processingTime Float    @map("processing_time") // in seconds
+  userId         String?  @map("user_id")
+  apiKeyId       String?  @map("api_key_id")
+  requestId      String?  @map("request_id")
+  timestamp      DateTime @default(now())
+  cost           Float    @default(0)
+  
+  @@map("model_usage")
+}

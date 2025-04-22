@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import axios from 'axios';
-import { BaseModelAdapter, ModelResponse, ModelRequestOptions } from './base-adapter';
+import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk } from './base-adapter';
 
 // OpenAI API response interface
 interface OpenAIResponse {
@@ -106,6 +106,7 @@ export class OpenAIAdapter extends BaseModelAdapter {
         frequency_penalty: options?.frequencyPenalty || 0,
         presence_penalty: options?.presencePenalty || 0,
         stop: options?.stop,
+        stream: false
       };
 
       // Make request to OpenAI API
@@ -166,6 +167,125 @@ export class OpenAIAdapter extends BaseModelAdapter {
   countTokens(text: string): number {
     // Simple approximation: 1 token ≈ 4 characters
     return Math.ceil(text.length / 4);
+  }
+
+  /**
+   * Generate a streaming completion for a prompt
+   * @param prompt The prompt to complete
+   * @param options Request options
+   * @yields Streaming chunks of the response
+   */
+  async *generateCompletionStream(
+    prompt: string,
+    options?: ModelRequestOptions
+  ): AsyncGenerator<StreamingChunk, void, unknown> {
+    const startTime = Date.now();
+    this.logRequest(prompt, { ...options, stream: true });
+
+    try {
+      // Check if API key is available
+      if (!this.apiKey) {
+        throw new Error('OpenAI API key not configured');
+      }
+
+      // Prepare request
+      const requestOptions = {
+        model: this.modelId,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: options?.maxTokens || 1024,
+        temperature: options?.temperature || 0.7,
+        top_p: options?.topP || 1,
+        frequency_penalty: options?.frequencyPenalty || 0,
+        presence_penalty: options?.presencePenalty || 0,
+        stop: options?.stop,
+        stream: true
+      };
+
+      // Make request to OpenAI API
+      const response = await axios.post(
+        `${this.baseUrl}/chat/completions`,
+        requestOptions,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.apiKey}`,
+          },
+          responseType: 'stream'
+        }
+      );
+
+      // Process the streaming response
+      const stream = response.data;
+      let buffer = '';
+      let finishReason: string | undefined;
+
+      for await (const chunk of stream) {
+        const lines = (buffer + chunk.toString()).split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.trim() === '') continue;
+          if (line.trim() === 'data: [DONE]') {
+            const finalChunk: StreamingChunk = {
+              chunk: '',
+              done: true,
+              model: this.modelId,
+              finishReason
+            };
+            this.logStreamingChunk(finalChunk);
+            yield finalChunk;
+            return;
+          }
+
+          try {
+            const data = JSON.parse(line.replace(/^data: /, ''));
+            if (data.choices && data.choices.length > 0) {
+              const choice = data.choices[0];
+              const content = choice.delta?.content || '';
+              finishReason = choice.finish_reason;
+
+              const streamingChunk: StreamingChunk = {
+                chunk: content,
+                done: !!finishReason,
+                model: this.modelId,
+                finishReason
+              };
+
+              this.logStreamingChunk(streamingChunk);
+              yield streamingChunk;
+            }
+          } catch (error) {
+            // Skip invalid JSON
+            this.fastify.log.error(`Error parsing streaming response: ${error}`);
+          }
+        }
+      }
+
+      // Final chunk if not already sent
+      const finalChunk: StreamingChunk = {
+        chunk: '',
+        done: true,
+        model: this.modelId,
+        finishReason: finishReason || 'stop'
+      };
+      this.logStreamingChunk(finalChunk);
+      yield finalChunk;
+
+    } catch (error) {
+      this.fastify.log.error(error, `OpenAI streaming API error for model ${this.modelId}`);
+      
+      // Yield error chunk
+      const errorChunk: StreamingChunk = {
+        chunk: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        done: true,
+        model: this.modelId,
+        error: true,
+        errorDetails: error instanceof Error ? error.message : 'Unknown error'
+      };
+      
+      this.logStreamingChunk(errorChunk);
+      yield errorChunk;
+    }
   }
 }
 

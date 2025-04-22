@@ -8,12 +8,21 @@ import corsPlugin from './plugins/cors';
 import redisPlugin from './plugins/redis';
 import swaggerPlugin from './plugins/swagger';
 import authPlugin from './plugins/auth';
+import monitoringPlugin from './plugins/monitoring';
+import rateLimitPlugin from './plugins/rate-limit';
+import dbOptimizerPlugin from './plugins/db-optimizer';
+import advancedCachePlugin from './plugins/advanced-cache';
 import { prismaPlugin } from './services/prisma';
+
+// Import utilities
+import logger from './utils/logger';
 
 // Import routes
 import healthRoutes from './routes/health';
 import modelsRoutes from './routes/models';
 import promptRoutes from './routes/prompt';
+import adminRoutes from './routes/admin';
+import dashboardRoutes from './routes/dashboard';
 
 // Declare module augmentation for Fastify
 declare module 'fastify' {
@@ -30,15 +39,15 @@ declare module 'fastify' {
 export function createServer(): FastifyInstance {
   // Create Fastify instance
   const server: FastifyInstance = Fastify({
-    logger: {
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          translateTime: 'HH:MM:ss Z',
-          ignore: 'pid,hostname',
-        },
-      },
-    },
+    logger: logger.createLogger({
+      prettyPrint: true,
+      redact: [
+        'req.headers.authorization',
+        'req.headers["x-api-key"]',
+        'req.body.password',
+        'req.body.apiKey',
+      ]
+    }),
     // Add request ID to each request
     genReqId: (req) => {
       const requestId = req.headers['x-request-id'] as string;
@@ -61,6 +70,21 @@ export async function registerPlugins(server: FastifyInstance): Promise<void> {
   // Register database plugin
   await server.register(prismaPlugin);
   
+  // Register database optimizer
+  // Get configuration with fallbacks for database optimizer
+  const dbConfig = (server as any).config || {};
+  
+  await server.register(dbOptimizerPlugin, {
+    logQueries: dbConfig.NODE_ENV === 'development',
+    logSlowQueries: true,
+    slowQueryThreshold: dbConfig.DB_SLOW_QUERY_THRESHOLD || 500,
+    collectMetrics: true,
+    pool: {
+      min: dbConfig.DB_POOL_MIN || 2,
+      max: dbConfig.DB_POOL_MAX || 10,
+    }
+  });
+  
   // Register other plugins
   await server.register(corsPlugin);
   await server.register(authPlugin);
@@ -69,6 +93,33 @@ export async function registerPlugins(server: FastifyInstance): Promise<void> {
   const config = (server as any).config || {};
   if (config.ENABLE_CACHE !== false) {
     await server.register(redisPlugin);
+    
+    // Register advanced cache plugin
+    const cacheConfig = (server as any).config || {};
+    await server.register(advancedCachePlugin, {
+      enabled: cacheConfig.ENABLE_CACHE !== false,
+      ttl: cacheConfig.CACHE_TTL || 300,
+      prefix: cacheConfig.CACHE_PREFIX || 'cache:',
+      storage: 'redis',
+      strategies: {
+        byPath: true,
+        byQueryParams: true,
+        byHeaders: ['accept-language'],
+        byUser: cacheConfig.CACHE_BY_USER === 'true',
+        byContentType: true,
+      },
+      exclude: {
+        paths: ['^/health', '^/metrics', '^/admin'],
+        methods: ['POST', 'PUT', 'DELETE', 'PATCH'],
+      },
+      invalidation: {
+        models: {
+          'model': ['cache:models:*'],
+          'user': ['cache:users:*', 'cache:admin:users:*'],
+          'config': ['cache:*'], // Invalidate all cache when config changes
+        }
+      }
+    });
   }
   
   // Only register Swagger if enabled (with fallback)
@@ -76,30 +127,46 @@ export async function registerPlugins(server: FastifyInstance): Promise<void> {
     await server.register(swaggerPlugin);
   }
   
-  // Add global hooks
-  server.addHook('onRequest', (request, reply, done) => {
-    request.log.info({
-      url: request.url,
-      method: request.method,
-      id: request.id
-    }, 'incoming request');
-    done();
+  // Get configuration with fallbacks for monitoring
+  const monConfig = (server as any).config || {};
+  
+  // Register monitoring plugin
+  await server.register(monitoringPlugin, {
+    enableMetrics: monConfig.ENABLE_METRICS !== false,
+    metricsPath: monConfig.METRICS_PATH || '/metrics',
+    collectDefaultMetrics: true,
+    enableTracing: monConfig.NODE_ENV === 'production',
+    sampleRate: monConfig.METRICS_SAMPLE_RATE || 1.0,
+    exporters: {
+      prometheus: true,
+      console: monConfig.NODE_ENV === 'development',
+    }
   });
   
-  // Add error handler
-  server.setErrorHandler((error, request, reply) => {
-    request.log.error(error);
-    
-    // Determine status code
-    const statusCode = error.statusCode || 500;
-    
-    // Send error response
-    reply.status(statusCode).send({
-      error: error.message || 'Internal Server Error',
-      statusCode,
-      requestId: request.id
-    });
+  // Get configuration with fallbacks for rate limiting
+  const rateConfig = (server as any).config || {};
+  
+  // Register rate limiting plugin
+  await server.register(rateLimitPlugin, {
+    global: {
+      max: rateConfig.RATE_LIMIT_MAX || 100,
+      timeWindow: rateConfig.RATE_LIMIT_WINDOW || 60000, // 1 minute
+    },
+    endpoints: {
+      '/prompt': {
+        max: rateConfig.PROMPT_RATE_LIMIT_MAX || 20,
+        timeWindow: rateConfig.PROMPT_RATE_LIMIT_WINDOW || 60000,
+      },
+      '/admin/.*': {
+        max: rateConfig.ADMIN_RATE_LIMIT_MAX || 50,
+        timeWindow: rateConfig.ADMIN_RATE_LIMIT_WINDOW || 60000,
+      }
+    },
+    store: rateConfig.REDIS_URL ? 'redis' : 'memory',
   });
+  
+  // Setup enhanced request logging with correlation IDs and metrics
+  logger.setupRequestLogging(server);
 }
 
 /**
@@ -111,6 +178,8 @@ export async function registerRoutes(server: FastifyInstance): Promise<void> {
   await server.register(healthRoutes, { prefix: '/health' });
   await server.register(modelsRoutes, { prefix: '/models' });
   await server.register(promptRoutes, { prefix: '/prompt' });
+  await server.register(adminRoutes, { prefix: '/admin' });
+  await server.register(dashboardRoutes, { prefix: '/dashboard' });
 }
 
 /**
