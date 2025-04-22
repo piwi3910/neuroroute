@@ -1,10 +1,13 @@
+import os
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from contextlib import contextmanager
 
-# Create SQLite database file in the project directory
-DATABASE_URL = "sqlite:///./db_data/api_keys.db"
+# Define database directory and file path
+DB_DIRECTORY = "./db_data"
+DB_FILE = "api_keys.db"
+DATABASE_URL = f"sqlite:///{DB_DIRECTORY}/{DB_FILE}"
 
 # Create SQLAlchemy engine
 engine = create_engine(
@@ -46,5 +49,10 @@ def get_db_context():
 def init_db():
     """
     Initialize the database by creating all tables.
+    Ensures the database directory exists before creating tables.
     """
+    # Ensure the database directory exists
+    os.makedirs(DB_DIRECTORY, exist_ok=True)
+    
+    # Create all tables
     Base.metadata.create_all(bind=engine)

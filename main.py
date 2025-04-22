@@ -42,9 +42,6 @@ async def lifespan(app: FastAPI):
     from db import init_db
     init_db()
     logger.info("Database initialized")
-    
-    # Initialize database
-    init_db()
 
     # Initialize cache, classifier, and router
     app.state.cache = get_cache(logger, settings)

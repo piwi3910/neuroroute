@@ -76,3 +76,8 @@ coverage.xml
 *.bak
 *.swp
 *~
+
+# Database files
+*.db
+db_data/*.db
+api_keys.db
