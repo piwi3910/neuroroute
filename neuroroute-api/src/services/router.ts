@@ -615,13 +615,13 @@ export class RouterService {
       modelChain = ['claude-3-7-sonnet-latest', 'gpt-4.1'];
     } else if (classification.type === 'code' && classification.features.includes('reasoning')) {
       // For complex code tasks, use a reasoning model followed by a code-specific model
-      modelChain = ['gpt-4', 'claude-3-sonnet'];
+      modelChain = ['gpt-4.1', 'claude-3-7-sonnet-latest'];
     } else if (classification.features.includes('summarization')) {
       // For summarization tasks, use a fast model followed by a quality model
-      modelChain = ['gpt-3.5-turbo', 'claude-3-sonnet'];
+      modelChain = ['gpt-4.1', 'claude-3-7-sonnet-latest'];
     } else {
       // Default chain for other complex tasks
-      modelChain = ['gpt-3.5-turbo', 'claude-3-opus'];
+      modelChain = ['gpt-4.1', 'claude-3-7-sonnet-latest'];
     }
     
     // Filter out unavailable models
@@ -629,7 +629,7 @@ export class RouterService {
     
     // If no models are available, fall back to default selection
     if (modelChain.length === 0) {
-      const fallbackModel = this.selectFallbackModel('gpt-4', classification);
+      const fallbackModel = this.selectFallbackModel('gpt-4.1', classification);
       return await this.sendToModel(fallbackModel, prompt, maxTokens, temperature);
     }
     
@@ -848,39 +848,39 @@ export class RouterService {
     
     // Default selection based on intent type and complexity
     const intentModelMap: Record<string, string> = {
-      'general': 'gpt-3.5-turbo',
-      'code': 'gpt-4',
-      'creative': 'claude-3-opus',
-      'analytical': 'claude-3-opus',
-      'factual': 'gpt-4',
-      'mathematical': 'gpt-3.5-turbo',
-      'conversational': 'claude-3-haiku'
+      'general': 'gpt-4.1',
+      'code': 'gpt-4.1',
+      'creative': 'claude-3-7-sonnet-latest',
+      'analytical': 'claude-3-7-sonnet-latest',
+      'factual': 'gpt-4.1',
+      'mathematical': 'gpt-4.1',
+      'conversational': 'claude-3-7-sonnet-latest'
     };
     
     // Adjust based on complexity
     if (classification.complexity === 'very-complex' || classification.complexity === 'complex') {
       if (classification.type === 'code' || classification.type === 'analytical') {
-        return 'gpt-4';
+        return 'gpt-4.1';
       } else if (classification.type === 'creative') {
-        return 'claude-3-opus';
+        return 'claude-3-7-sonnet-latest';
       }
     } else if (classification.complexity === 'simple') {
       if (classification.type === 'conversational') {
-        return 'claude-3-haiku';
+        return 'claude-3-7-sonnet-latest';
       } else {
-        return 'gpt-3.5-turbo';
+        return 'gpt-4.1';
       }
     }
     
-    // Get the model for this intent, or default to gpt-3.5-turbo
-    const selectedModel = intentModelMap[classification.type] ?? 'gpt-3.5-turbo';
+    // Get the model for this intent, or default to gpt-4.1
+    const selectedModel = intentModelMap[classification.type] ?? 'gpt-4.1';
     
     // Check if selected model is available
     if (this.isModelAvailable(selectedModel)) {
       return selectedModel;
     } else {
       // Fall back to any suitable model
-      return suitableModels[0]?.id || 'gpt-3.5-turbo';
+      return suitableModels[0]?.id || 'gpt-4.1';
     }
   }
 
