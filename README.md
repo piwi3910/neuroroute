@@ -53,6 +53,30 @@ NeuroRoute is an intelligent routing layer that receives prompts and intelligent
    redis-server
    ```
 
+## Secure API Key Management
+
+NeuroRoute requires API keys for OpenAI and Anthropic services. To ensure these keys remain secure:
+
+1. **Never commit API keys to Git**
+   - The `.env` file is included in `.gitignore` to prevent accidental commits
+   - Always use `.env.example` with placeholder values in version control
+
+2. **Rotate API keys regularly**
+   - Periodically generate new API keys and update your local `.env` file
+   - Revoke old keys after rotation
+
+3. **Use environment-specific keys**
+   - Use different API keys for development, testing, and production
+   - Consider using API key management services for production environments
+
+4. **Monitor API key usage**
+   - Regularly check your API usage dashboards for unusual activity
+   - Set up billing alerts to prevent unexpected charges
+
+5. **Limit API key permissions**
+   - When possible, use scoped API keys with minimal required permissions
+   - Create separate keys for different services or components
+
 ## Usage
 
 ### Starting the API
