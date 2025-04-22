@@ -11,9 +11,8 @@ const promptRoutes: FastifyPluginAsync = async (fastify) => {
   // Create router service
   const routerService = createRouterService(fastify);
   
-  // Add route with authentication
-  fastify.post('/', {
-    onRequest: [fastify.authenticate],
+  // Create route options
+  const routeOptions: any = {
     schema: {
       description: 'Route a prompt to the appropriate model',
       tags: ['prompt'],
@@ -58,7 +57,7 @@ const promptRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     },
-    handler: async (request, reply) => {
+    handler: async (request: any, reply: any) => {
       const startTime = Date.now();
       
       try {
@@ -147,7 +146,15 @@ const promptRoutes: FastifyPluginAsync = async (fastify) => {
         };
       }
     },
-  });
+  };
+  
+  // Add authentication if available
+  if (fastify.hasDecorator('authenticate')) {
+    routeOptions.onRequest = [fastify.authenticate];
+  }
+  
+  // Register the route
+  fastify.post('/', routeOptions);
 };
 
 export default promptRoutes;
