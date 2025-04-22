@@ -18,6 +18,7 @@ from router import get_router, ModelRouter, ModelNotAvailableError, AllModelsFai
 from cache import get_cache, Cache
 from classifier import get_classifier
 import utils.logger
+from api_keys import router as api_keys_router
 
 # Initialize logger
 logger = utils.logger.get_logger()
@@ -33,7 +34,17 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting NeuroRoute API v{settings.api.app_version}")
 
     # Create necessary directories
+    # Create necessary directories
     os.makedirs("logs", exist_ok=True)
+    os.makedirs("db_data", exist_ok=True)
+    
+    # Initialize database
+    from db import init_db
+    init_db()
+    logger.info("Database initialized")
+    
+    # Initialize database
+    init_db()
 
     # Initialize cache, classifier, and router
     app.state.cache = get_cache(logger, settings)
@@ -694,6 +705,7 @@ async def clear_cache(
 app.include_router(main_router)
 app.include_router(model_router)
 app.include_router(admin_router)
+app.include_router(api_keys_router)
 
 # Set start time when app is created
 app.start_time = time.time()

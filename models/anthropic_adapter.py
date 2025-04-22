@@ -1,13 +1,13 @@
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 import asyncio
-import anthropic
 from anthropic import AsyncAnthropic
+import os
 from loguru import logger
-from models.base_adapter import ModelAdapter
+
+from .base_adapter import ModelAdapter
+
 
 class AnthropicAdapter(ModelAdapter):
-    """Adapter for Anthropic Claude models."""
-    
     def __init__(self, model_config: Dict[str, Any]):
         """
         Initialize the Anthropic client and configuration.
@@ -16,7 +16,6 @@ class AnthropicAdapter(ModelAdapter):
             model_config: Configuration for the Anthropic model
         """
         super().__init__(model_config)
-        self._validate_api_key()
         
         # Extract configuration
         config = model_config.get("config", {})
@@ -26,14 +25,42 @@ class AnthropicAdapter(ModelAdapter):
         self.max_tokens = config.get("max_tokens", 4096)
         self.timeout = config.get("timeout", 30)  # timeout in seconds
         
+        # Try to get API key from database
+        self._get_api_key_from_db()
+        
+        # Validate API key
+        self._validate_api_key()
+        
         # Initialize async client
         self.client = AsyncAnthropic(
-            api_key=self.api_key, 
+            api_key=self.api_key,
             timeout=self.timeout
         )
         
         logger.info(f"Initialized Anthropic adapter with model: {self.model}")
-    
+        
+    def _get_api_key_from_db(self):
+        """
+        Try to get API key from database.
+        If found, use it instead of the one from environment variables.
+        """
+        try:
+            import sqlite3
+            conn = sqlite3.connect("./db_data/api_keys.db")
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT api_key FROM api_keys WHERE provider = ? AND is_active = 1", 
+                ("anthropic",)
+            )
+            result = cursor.fetchone()
+            if result:
+                self.api_key = result["api_key"]
+                logger.info("Using Anthropic API key from database")
+            conn.close()
+        except Exception as e:
+            logger.warning(f"Failed to get Anthropic API key from database: {e}")
+
     @ModelAdapter.measure_latency
     async def generate_response(self, prompt: str, metadata: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -59,10 +86,7 @@ class AnthropicAdapter(ModelAdapter):
             system_prompt = "You are a helpful AI assistant."
             
             # Make request to Anthropic API using the messages API
-            # This is the recommended approach for all new Claude models
-            # Make request to Anthropic API using the messages API
-            # This is the recommended approach for all new Claude models
-            message = await self.client.messages.create(
+            response = await self.client.messages.create(
                 model=self.model,
                 max_tokens=max_tokens,
                 temperature=temperature,
@@ -73,78 +97,72 @@ class AnthropicAdapter(ModelAdapter):
             )
             
             # Extract response text from message content
-            # Handle both text-only and mixed content types
             response_text = ""
-            for content_block in message.content:
+            for content_block in response.content:
                 if content_block.type == "text":
                     response_text += content_block.text
             
             # Extract token usage information
             token_usage = {
-                "prompt_tokens": message.usage.input_tokens,
-                "completion_tokens": message.usage.output_tokens,
-                "total_tokens": message.usage.input_tokens + message.usage.output_tokens
+                "prompt_tokens": response.usage.input_tokens,
+                "completion_tokens": response.usage.output_tokens,
+                "total_tokens": response.usage.input_tokens + response.usage.output_tokens
             }
             
             return {
                 "response": response_text,
                 "model_used": "anthropic",
                 "token_usage": token_usage,
-                "stop_reason": message.stop_reason,
-                "model_name": self.model,
-                "cost_estimate_usd": self._calculate_cost_estimate(token_usage)
+                "stop_reason": response.stop_reason,
+                "finish_reason": response.stop_reason,  # For compatibility with OpenAI
+                "model": self.model
             }
             
-        except anthropic.RateLimitError as e:
-            logger.warning(f"Anthropic rate limit exceeded: {e}")
-            raise Exception(f"Rate limit exceeded: {str(e)}")
-        except anthropic.APITimeoutError as e:
-            logger.warning(f"Anthropic API timeout: {e}")
-            raise Exception(f"API timeout: {str(e)}")
-        except anthropic.APIConnectionError as e:
-            logger.error(f"Anthropic API connection error: {e}")
-            raise Exception(f"Connection error: {str(e)}")
-        except anthropic.BadRequestError as e:
-            logger.error(f"Anthropic API bad request: {e}")
-            raise Exception(f"Bad request: {str(e)}")
-        except anthropic.APIStatusError as e:
-            logger.error(f"Anthropic API status error: {e}")
-            raise Exception(f"API status error: {str(e)}")
-        except anthropic.AuthenticationError as e:
-            logger.error(f"Anthropic API authentication error: {e}")
-            raise Exception(f"Authentication error: Check your API key")
         except Exception as e:
             logger.error(f"Anthropic API unexpected error: {e}")
-            raise Exception(f"Unexpected error: {str(e)}")
-    
-    def _calculate_cost_estimate(self, token_usage: Dict[str, int]) -> float:
+            raise
+            
+    def _validate_api_key(self):
         """
-        Calculate estimated cost of the API call.
+        Validate that an API key is available.
+        """
+        if not self.api_key:
+            # Try to get from environment
+            self.api_key = os.environ.get("ANTHROPIC_API_KEY")
+            
+        if not self.api_key:
+            raise Exception(f"Authentication error: Check your API key")
+            
+    async def get_token_count(self, text: str) -> int:
+        """
+        Get the number of tokens in the text.
         
         Args:
-            token_usage: Token usage metrics from the API response
+            text: The text to count tokens for
             
         Returns:
-            Estimated cost in USD
+            The number of tokens
         """
-        # Pricing per 1M tokens (simplified estimates)
-        # These rates should be updated regularly as pricing changes
-        model_pricing = {
-            "claude-3-opus-20240229": {"input": 15.0, "output": 75.0},
-            "claude-3-sonnet-20240229": {"input": 3.0, "output": 15.0},
-            "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
-            "claude-2.1": {"input": 8.0, "output": 24.0},
-            "claude-2.0": {"input": 8.0, "output": 24.0},
-            "claude-instant-1.2": {"input": 0.8, "output": 2.4}
+        # Anthropic doesn't provide a direct token counting method
+        # This is a rough estimate based on GPT tokenization
+        return len(text.split()) * 1.3
+        
+    def calculate_cost(self, token_usage: Dict[str, int]) -> float:
+        """
+        Calculate the cost of the API call based on token usage.
+        
+        Args:
+            token_usage: Dict with prompt_tokens and completion_tokens
+            
+        Returns:
+            The cost in USD
+        """
+        # Claude 3 Sonnet pricing (as of April 2024)
+        pricing = {
+            "input": 3.0,    # $3.00 per million tokens
+            "output": 15.0   # $15.00 per million tokens
         }
         
-        # Get pricing for the current model, default to sonnet if not found
-        pricing = model_pricing.get(
-            self.model, 
-            model_pricing.get("claude-3-sonnet-20240229")
-        )
-        
-        # Calculate cost (converting from per 1M tokens to per token)
         prompt_cost = (token_usage.get("prompt_tokens", 0) * pricing["input"]) / 1_000_000
         completion_cost = (token_usage.get("completion_tokens", 0) * pricing["output"]) / 1_000_000
         
