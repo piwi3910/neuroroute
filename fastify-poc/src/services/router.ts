@@ -32,9 +32,13 @@ export class RouterService {
   constructor(fastify: FastifyInstance) {
     this.fastify = fastify;
     this.classifier = createClassifierService(fastify);
+    // Get config with fallback
+    const config = (fastify as any).config || {};
+    const cacheTTL = config.REDIS_CACHE_TTL || 300;
+    
     this.cache = createCacheService(fastify, {
       namespace: 'router',
-      ttl: fastify.config.REDIS_CACHE_TTL,
+      ttl: cacheTTL,
     });
   }
 
@@ -57,8 +61,9 @@ export class RouterService {
       // Generate a cache key for this prompt
       const cacheKey = this.generateCacheKey(prompt, modelId, maxTokens, temperature);
       
-      // Check if caching is enabled in config
-      if (this.fastify.config.ENABLE_CACHE) {
+      // Check if caching is enabled in config (with fallback)
+      const configCache = (this.fastify as any).config || {};
+      if (configCache.ENABLE_CACHE !== false) {
         // Try to get from cache
         const cachedResponse = await this.cache.get<RouterResponse>(cacheKey);
         if (cachedResponse) {
@@ -79,7 +84,8 @@ export class RouterService {
         const response = await this.sendToModel(modelId, prompt, maxTokens, temperature);
         
         // Cache the response if enabled
-        if (this.fastify.config.ENABLE_CACHE) {
+        const configCache1 = (this.fastify as any).config || {};
+        if (configCache1.ENABLE_CACHE !== false) {
           await this.cache.set(cacheKey, response);
         }
         
@@ -106,7 +112,8 @@ export class RouterService {
       };
       
       // Cache the response if enabled
-      if (this.fastify.config.ENABLE_CACHE) {
+      const configCache2 = (this.fastify as any).config || {};
+      if (configCache2.ENABLE_CACHE !== false) {
         await this.cache.set(cacheKey, response);
       }
 
