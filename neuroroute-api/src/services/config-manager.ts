@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { AppConfig } from '../config';
+import { AppConfig } from '../config.js';
+import crypto from 'crypto';
 
 /**
  * Configuration change event
@@ -12,17 +13,33 @@ export interface ConfigChangeEvent {
 }
 
 /**
+ * Model configuration interface
+ */
+export interface ModelConfiguration {
+  id: string;
+  name: string;
+  provider: string;
+  enabled: boolean;
+  priority: number;
+  capabilities: string[];
+  config: Record<string, any>;
+}
+
+/**
  * Configuration manager service
  * 
  * This service provides dynamic configuration management with caching,
- * validation, and event-based updates.
+ * validation, and event-based updates. It also handles secure storage
+ * and retrieval of API keys and model configurations.
  */
 export class ConfigManager {
   private fastify: FastifyInstance;
   private configCache: Map<string, any> = new Map();
+  private modelConfigCache: Map<string, ModelConfiguration> = new Map();
   private listeners: Map<string, Function[]> = new Map();
   private cacheEnabled: boolean;
   private cacheTtl: number; // milliseconds
+  private encryptionKey: Buffer;
 
   /**
    * Create a new configuration manager
@@ -33,6 +50,11 @@ export class ConfigManager {
     this.fastify = fastify;
     this.cacheEnabled = fastify.config.ENABLE_DYNAMIC_CONFIG;
     this.cacheTtl = 60000; // Default 1 minute
+    
+    // Initialize encryption key from JWT secret
+    // In a production environment, this should use a dedicated encryption key
+    const jwtSecret = fastify.config.JWT_SECRET;
+    this.encryptionKey = crypto.createHash('sha256').update(jwtSecret).digest();
     
     // Initialize cache with current config
     this.initializeCache();
@@ -110,7 +132,7 @@ export class ConfigManager {
       
       return envValue;
     } catch (error) {
-      this.fastify.log.error(error, `Error getting config value for ${key}`);
+      this.fastify.log.error(error, `Error getting config value for ${String(key)}`);
       return (this.fastify.config[key] as unknown as T) || defaultValue as T;
     }
   }
@@ -145,7 +167,7 @@ export class ConfigManager {
       
       return true;
     } catch (error) {
-      this.fastify.log.error(error, `Error setting config value for ${key}`);
+      this.fastify.log.error(error, `Error setting config value for ${String(key)}`);
       return false;
     }
   }
@@ -182,7 +204,7 @@ export class ConfigManager {
       
       return true;
     } catch (error) {
-      this.fastify.log.error(error, `Error resetting config value for ${key}`);
+      this.fastify.log.error(error, `Error resetting config value for ${String(key)}`);
       return false;
     }
   }
@@ -303,6 +325,289 @@ export class ConfigManager {
       this.fastify.log.error(error, 'Error getting all config');
       return { ...this.fastify.config };
     }
+  }
+
+  /**
+   * Encrypt a sensitive value
+   * 
+   * @param value Value to encrypt
+   * @returns Encrypted value
+   */
+  private encrypt(value: string): string {
+    const iv = crypto.randomBytes(16);
+    const cipher = crypto.createCipheriv('aes-256-cbc', this.encryptionKey, iv);
+    let encrypted = cipher.update(value, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return `${iv.toString('hex')}:${encrypted}`;
+  }
+
+  /**
+   * Decrypt a sensitive value
+   * 
+   * @param encrypted Encrypted value
+   * @returns Decrypted value
+   */
+  private decrypt(encrypted: string): string {
+    try {
+      const [ivHex, encryptedValue] = encrypted.split(':');
+      const iv = Buffer.from(ivHex, 'hex');
+      const decipher = crypto.createDecipheriv('aes-256-cbc', this.encryptionKey, iv);
+      let decrypted = decipher.update(encryptedValue, 'hex', 'utf8');
+      decrypted += decipher.final('utf8');
+      return decrypted;
+    } catch (error) {
+      this.fastify.log.error(error, 'Error decrypting value');
+      return '';
+    }
+  }
+
+  /**
+   * Get an API key from the database
+   * 
+   * @param provider Provider name (e.g., 'openai', 'anthropic')
+   * @returns API key
+   */
+  async getApiKey(provider: string): Promise<string | null> {
+    try {
+      const key = `api_key.${provider.toLowerCase()}`;
+      
+      // Check cache first
+      const cached = this.configCache.get(key);
+      if (cached && cached.expires > Date.now()) {
+        return this.decrypt(cached.value);
+      }
+      
+      // Try to get from database
+      const dbConfig = await this.fastify.prisma.config.findUnique({
+        where: { key }
+      });
+      
+      if (dbConfig) {
+        // Decrypt the value
+        const decrypted = this.decrypt(dbConfig.value);
+        
+        // Update cache
+        this.configCache.set(key, {
+          value: dbConfig.value, // Store encrypted value in cache
+          timestamp: Date.now(),
+          expires: Date.now() + this.cacheTtl
+        });
+        
+        return decrypted;
+      }
+      
+      // Fall back to environment variable
+      const envKey = `${provider.toUpperCase()}_API_KEY`;
+      const envValue = (this.fastify.config as any)[envKey];
+      
+      if (envValue) {
+        // Store in database for future use
+        const encrypted = this.encrypt(envValue);
+        await this.setApiKey(provider, envValue);
+        return envValue;
+      }
+      
+      return null;
+    } catch (error) {
+      this.fastify.log.error(error, `Error getting API key for ${provider}`);
+      
+      // Fall back to environment variable on error
+      const envKey = `${provider.toUpperCase()}_API_KEY`;
+      return (this.fastify.config as any)[envKey] || null;
+    }
+  }
+
+  /**
+   * Set an API key in the database
+   * 
+   * @param provider Provider name (e.g., 'openai', 'anthropic')
+   * @param apiKey API key
+   * @returns True if successful
+   */
+  async setApiKey(provider: string, apiKey: string): Promise<boolean> {
+    try {
+      const key = `api_key.${provider.toLowerCase()}`;
+      
+      // Encrypt the API key
+      const encrypted = this.encrypt(apiKey);
+      
+      // Store in database
+      await this.fastify.prisma.config.upsert({
+        where: { key },
+        update: { value: encrypted },
+        create: { key, value: encrypted }
+      });
+      
+      // Update cache
+      this.configCache.set(key, {
+        value: encrypted,
+        timestamp: Date.now(),
+        expires: Date.now() + this.cacheTtl
+      });
+      
+      return true;
+    } catch (error) {
+      this.fastify.log.error(error, `Error setting API key for ${provider}`);
+      return false;
+    }
+  }
+
+  /**
+   * Get all API keys
+   * 
+   * @returns Map of provider names to API keys
+   */
+  async getAllApiKeys(): Promise<Map<string, string>> {
+    try {
+      const apiKeys = new Map<string, string>();
+      
+      // Get all API keys from database
+      const dbConfigs = await this.fastify.prisma.config.findMany({
+        where: {
+          key: {
+            startsWith: 'api_key.'
+          }
+        }
+      });
+      
+      // Process each API key
+      for (const dbConfig of dbConfigs) {
+        const provider = dbConfig.key.replace('api_key.', '');
+        const decrypted = this.decrypt(dbConfig.value);
+        apiKeys.set(provider, decrypted);
+      }
+      
+      return apiKeys;
+    } catch (error) {
+      this.fastify.log.error(error, 'Error getting all API keys');
+      return new Map();
+    }
+  }
+
+  /**
+   * Get a model configuration from the database
+   * 
+   * @param modelId Model ID
+   * @returns Model configuration
+   */
+  async getModelConfig(modelId: string): Promise<ModelConfiguration | null> {
+    try {
+      // Check cache first
+      if (this.modelConfigCache.has(modelId)) {
+        return this.modelConfigCache.get(modelId) || null;
+      }
+      
+      // Try to get from database
+      const dbConfig = await this.fastify.prisma.modelConfig.findUnique({
+        where: { id: modelId }
+      });
+      
+      if (dbConfig) {
+        const modelConfig: ModelConfiguration = {
+          id: dbConfig.id,
+          name: dbConfig.name,
+          provider: dbConfig.provider,
+          enabled: dbConfig.enabled,
+          priority: dbConfig.priority,
+          capabilities: dbConfig.capabilities,
+          config: dbConfig.config as Record<string, any>
+        };
+        
+        // Update cache
+        this.modelConfigCache.set(modelId, modelConfig);
+        
+        return modelConfig;
+      }
+      
+      return null;
+    } catch (error) {
+      this.fastify.log.error(error, `Error getting model config for ${modelId}`);
+      return null;
+    }
+  }
+
+  /**
+   * Set a model configuration in the database
+   * 
+   * @param modelConfig Model configuration
+   * @returns True if successful
+   */
+  async setModelConfig(modelConfig: ModelConfiguration): Promise<boolean> {
+    try {
+      // Store in database
+      await this.fastify.prisma.modelConfig.upsert({
+        where: { id: modelConfig.id },
+        update: {
+          name: modelConfig.name,
+          provider: modelConfig.provider,
+          enabled: modelConfig.enabled,
+          priority: modelConfig.priority,
+          capabilities: modelConfig.capabilities,
+          config: modelConfig.config
+        },
+        create: {
+          id: modelConfig.id,
+          name: modelConfig.name,
+          provider: modelConfig.provider,
+          enabled: modelConfig.enabled,
+          priority: modelConfig.priority,
+          capabilities: modelConfig.capabilities,
+          config: modelConfig.config
+        }
+      });
+      
+      // Update cache
+      this.modelConfigCache.set(modelConfig.id, modelConfig);
+      
+      return true;
+    } catch (error) {
+      this.fastify.log.error(error, `Error setting model config for ${modelConfig.id}`);
+      return false;
+    }
+  }
+
+  /**
+   * Get all model configurations
+   * 
+   * @returns Array of model configurations
+   */
+  async getAllModelConfigs(): Promise<ModelConfiguration[]> {
+    try {
+      // Get all model configs from database
+      const dbConfigs = await this.fastify.prisma.modelConfig.findMany({
+        where: {
+          enabled: true
+        }
+      });
+      
+      // Process each model config
+      const modelConfigs: ModelConfiguration[] = dbConfigs.map(config => ({
+        id: config.id,
+        name: config.name,
+        provider: config.provider,
+        enabled: config.enabled,
+        priority: config.priority,
+        capabilities: config.capabilities,
+        config: config.config as Record<string, any>
+      }));
+      
+      // Update cache
+      for (const config of modelConfigs) {
+        this.modelConfigCache.set(config.id, config);
+      }
+      
+      return modelConfigs;
+    } catch (error) {
+      this.fastify.log.error(error, 'Error getting all model configs');
+      return [];
+    }
+  }
+
+  /**
+   * Clear the model configuration cache
+   */
+  clearModelConfigCache(): void {
+    this.modelConfigCache.clear();
   }
 
   /**

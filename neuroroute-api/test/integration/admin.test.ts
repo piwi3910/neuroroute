@@ -1,9 +1,9 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import adminRoutes from '../../src/routes/admin';
-import { createUserService } from '../../src/services/user';
-import { createConfigManager } from '../../src/services/config-manager';
-import { createApiKeyService } from '../../src/services/api-key';
+import adminRoutes from '../../src/routes/admin.js';
+import { createUserService } from '../../src/services/user.js';
+import { createConfigManager } from '../../src/services/config-manager.js';
+import { createApiKeyService } from '../../src/services/api-key.js';
 
 describe('Admin API Endpoints', () => {
   let app: FastifyInstance;

@@ -1,5 +1,5 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
-import { getMetrics, resetMetrics, traces } from '../utils/logger';
+import { getMetrics, resetMetrics, traces } from '../utils/logger.js';
 import os from 'os';
 
 /**

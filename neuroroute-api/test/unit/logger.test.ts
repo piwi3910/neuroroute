@@ -10,7 +10,7 @@ import {
   trackModelUsage,
   metrics,
   traces
-} from '../../src/utils/logger';
+} from '../../src/utils/logger.js';
 
 describe('Logger Utilities', () => {
   let app: FastifyInstance;

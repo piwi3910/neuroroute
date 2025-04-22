@@ -166,3 +166,21 @@ model ModelUsage {
   
   @@map("model_usage")
 }
+
+// Audit log for tracking admin operations
+model AuditLog {
+  id           String   @id @default(uuid())
+  timestamp    DateTime @default(now())
+  userId       String   @map("user_id")
+  username     String
+  action       String
+  resource     String
+  resourceId   String?  @map("resource_id")
+  details      String?
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent")
+  status       String
+  errorMessage String?  @map("error_message")
+  
+  @@map("audit_logs")
+}

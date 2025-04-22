@@ -1,28 +1,29 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import { Server, IncomingMessage, ServerResponse } from 'http';
-import { AppConfig } from './config';
+import { AppConfig } from './config.js';
 
 // Import plugins
-import envPlugin from './plugins/env';
-import corsPlugin from './plugins/cors';
-import redisPlugin from './plugins/redis';
-import swaggerPlugin from './plugins/swagger';
-import authPlugin from './plugins/auth';
-import monitoringPlugin from './plugins/monitoring';
-import rateLimitPlugin from './plugins/rate-limit';
-import dbOptimizerPlugin from './plugins/db-optimizer';
-import advancedCachePlugin from './plugins/advanced-cache';
-import { prismaPlugin } from './services/prisma';
+import envPlugin from './plugins/env.js';
+import corsPlugin from './plugins/cors.js';
+import redisPlugin from './plugins/redis.js';
+import swaggerPlugin from './plugins/swagger.js';
+import authPlugin from './plugins/auth.js';
+import monitoringPlugin from './plugins/monitoring.js';
+import rateLimitPlugin from './plugins/rate-limit.js';
+import dbOptimizerPlugin from './plugins/db-optimizer.js';
+import advancedCachePlugin from './plugins/advanced-cache.js';
+import configManagerPlugin from './plugins/config-manager.js';
+import { prismaPlugin } from './services/prisma.js';
 
 // Import utilities
-import logger from './utils/logger';
+import logger from './utils/logger.js';
 
 // Import routes
-import healthRoutes from './routes/health';
-import modelsRoutes from './routes/models';
-import promptRoutes from './routes/prompt';
-import adminRoutes from './routes/admin';
-import dashboardRoutes from './routes/dashboard';
+import healthRoutes from './routes/health.js';
+import modelsRoutes from './routes/models.js';
+import promptRoutes from './routes/prompt.js';
+import adminRoutes from './routes/admin.js';
+import dashboardRoutes from './routes/dashboard.js';
 
 // Declare module augmentation for Fastify
 declare module 'fastify' {
@@ -69,6 +70,9 @@ export async function registerPlugins(server: FastifyInstance): Promise<void> {
   
   // Register database plugin
   await server.register(prismaPlugin);
+  
+  // Register config manager plugin
+  await server.register(configManagerPlugin);
   
   // Register database optimizer
   // Get configuration with fallbacks for database optimizer

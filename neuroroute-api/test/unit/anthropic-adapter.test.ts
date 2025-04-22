@@ -1,8 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
 import axios from 'axios';
-import createAnthropicAdapter, { AnthropicAdapter } from '../../src/models/anthropic-adapter';
-import { ModelResponse } from '../../src/models/base-adapter';
+import createAnthropicAdapter, { AnthropicAdapter } from '../../src/models/anthropic-adapter.js';
+import { ModelResponse } from '../../src/models/base-adapter.js';
 
 // Mock axios
 jest.mock('axios');

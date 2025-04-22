@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { UserService, createUserService, UserData, UserCreateData } from '../../src/services/user';
+import { UserService, createUserService, UserData, UserCreateData } from '../../src/services/user.js';
 
 describe('UserService', () => {
   let fastifyMock: FastifyInstance;

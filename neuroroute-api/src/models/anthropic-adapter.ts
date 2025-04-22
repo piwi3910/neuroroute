@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import axios from 'axios';
-import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk } from './base-adapter';
+import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk } from './base-adapter.js';
 
 // Anthropic API response interface
 interface AnthropicResponse {
@@ -27,9 +27,8 @@ export class AnthropicAdapter extends BaseModelAdapter {
   constructor(fastify: FastifyInstance, modelId: string) {
     super(fastify, modelId);
     
-    // Get API key from environment
-    const config = (fastify as any).config;
-    this.apiKey = config?.ANTHROPIC_API_KEY || '';
+    // Initialize with empty API key, will be loaded on demand
+    this.apiKey = '';
     this.baseUrl = 'https://api.anthropic.com/v1';
     
     // Set capabilities based on model
@@ -42,10 +41,42 @@ export class AnthropicAdapter extends BaseModelAdapter {
     this.details = {
       provider: 'Anthropic',
       version: modelId.includes('-') ? modelId.split('-').pop() : 'latest',
-      contextWindow: modelId.includes('claude-3-opus') ? 100000 : 
-                    modelId.includes('claude-3-sonnet') ? 200000 : 
+      contextWindow: modelId.includes('claude-3-opus') ? 100000 :
+                    modelId.includes('claude-3-sonnet') ? 200000 :
                     modelId.includes('claude-3-haiku') ? 200000 : 100000,
     };
+    
+    // Load API key
+    this.loadApiKey();
+  }
+  
+  /**
+   * Load API key from config manager or environment
+   */
+  private async loadApiKey(): Promise<void> {
+    try {
+      // Get config manager
+      const configManager = this.fastify.configManager;
+      
+      if (configManager) {
+        // Try to get API key from config manager
+        const apiKey = await configManager.getApiKey('anthropic');
+        if (apiKey) {
+          this.apiKey = apiKey;
+          return;
+        }
+      }
+      
+      // Fall back to environment variable
+      const config = (this.fastify as any).config;
+      this.apiKey = config?.ANTHROPIC_API_KEY || '';
+    } catch (error) {
+      this.fastify.log.error(error, 'Failed to load Anthropic API key');
+      
+      // Fall back to environment variable
+      const config = (this.fastify as any).config;
+      this.apiKey = config?.ANTHROPIC_API_KEY || '';
+    }
   }
 
   /**
@@ -53,6 +84,10 @@ export class AnthropicAdapter extends BaseModelAdapter {
    * @returns True if the model is available
    */
   async isAvailable(): Promise<boolean> {
+    // If API key is not loaded yet, try to load it
+    if (!this.apiKey) {
+      await this.loadApiKey();
+    }
     return !!this.apiKey;
   }
 
@@ -86,9 +121,12 @@ export class AnthropicAdapter extends BaseModelAdapter {
     this.logRequest(prompt, options);
 
     try {
-      // Check if API key is available
+      // Check if API key is available, try to load it if not
       if (!this.apiKey) {
-        throw new Error('Anthropic API key not configured');
+        await this.loadApiKey();
+        if (!this.apiKey) {
+          throw new Error('Anthropic API key not configured');
+        }
       }
 
       // Prepare request
@@ -179,9 +217,12 @@ export class AnthropicAdapter extends BaseModelAdapter {
     this.logRequest(prompt, { ...options, stream: true });
 
     try {
-      // Check if API key is available
+      // Check if API key is available, try to load it if not
       if (!this.apiKey) {
-        throw new Error('Anthropic API key not configured');
+        await this.loadApiKey();
+        if (!this.apiKey) {
+          throw new Error('Anthropic API key not configured');
+        }
       }
 
       // Prepare request

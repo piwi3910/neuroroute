@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import { BaseModelAdapter, ModelResponse, ModelRequestOptions } from '../../src/models/base-adapter';
+import { BaseModelAdapter, ModelResponse, ModelRequestOptions } from '../../src/models/base-adapter.js';
 
 // Create a concrete implementation of the abstract class for testing
 class TestModelAdapter extends BaseModelAdapter {

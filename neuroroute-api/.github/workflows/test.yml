@@ -1,0 +1,252 @@
+name: NeuroRoute API Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: neuroroute_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/neuroroute_test
+
+      - name: Run unit tests
+        run: npm run test:unit
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/neuroroute_test
+          REDIS_URL: redis://localhost:6379/1
+          JWT_SECRET: test-jwt-secret
+          OPENAI_API_KEY: test-openai-key
+          ANTHROPIC_API_KEY: test-anthropic-key
+
+      - name: Run integration tests
+        run: npm run test:integration
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/neuroroute_test
+          REDIS_URL: redis://localhost:6379/1
+          JWT_SECRET: test-jwt-secret
+          OPENAI_API_KEY: test-openai-key
+          ANTHROPIC_API_KEY: test-anthropic-key
+
+      - name: Generate coverage report
+        run: npm run test:coverage
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/neuroroute_test
+          REDIS_URL: redis://localhost:6379/1
+          JWT_SECRET: test-jwt-secret
+          OPENAI_API_KEY: test-openai-key
+          ANTHROPIC_API_KEY: test-anthropic-key
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./coverage
+          fail_ci_if_error: false
+
+  performance:
+    name: Run Performance Tests
+    runs-on: ubuntu-latest
+    needs: test
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: neuroroute_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/neuroroute_test
+
+      - name: Run performance tests
+        run: npm run test:performance
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/neuroroute_test
+          REDIS_URL: redis://localhost:6379/1
+          JWT_SECRET: test-jwt-secret
+          OPENAI_API_KEY: test-openai-key
+          ANTHROPIC_API_KEY: test-anthropic-key
+
+      - name: Upload performance report
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-report
+          path: performance-report.html
+
+  validation:
+    name: Validate Schemas
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate schemas
+        run: |
+          # Create a simple script to validate schemas
+          cat > validate-schemas.js << 'EOF'
+          import { promptRequestSchema, promptResponseSchema, modelConfigSchema, apiKeySchema } from './src/schemas/validation.js';
+
+          // Sample data for validation
+          const sampleData = {
+            promptRequest: {
+              prompt: "Test prompt",
+              model: "gpt-4",
+              options: {
+                maxTokens: 1024,
+                temperature: 0.7
+              }
+            },
+            promptResponse: {
+              response: "Test response",
+              model_used: "gpt-4",
+              tokens: {
+                prompt: 10,
+                completion: 20,
+                total: 30
+              }
+            },
+            modelConfig: {
+              id: "gpt-4",
+              name: "GPT-4",
+              provider: "openai",
+              enabled: true,
+              priority: 3,
+              capabilities: ["text-generation", "code-generation"],
+              config: {
+                cost: 0.03,
+                quality: 0.95,
+                maxTokens: 8192
+              }
+            },
+            apiKey: {
+              provider: "openai",
+              key: "sk-test-key"
+            }
+          };
+
+          // Validate schemas
+          try {
+            console.log("Validating prompt request schema...");
+            promptRequestSchema.parse(sampleData.promptRequest);
+            console.log("✅ Prompt request schema is valid");
+
+            console.log("Validating prompt response schema...");
+            promptResponseSchema.parse(sampleData.promptResponse);
+            console.log("✅ Prompt response schema is valid");
+
+            console.log("Validating model config schema...");
+            modelConfigSchema.parse(sampleData.modelConfig);
+            console.log("✅ Model config schema is valid");
+
+            console.log("Validating API key schema...");
+            apiKeySchema.parse(sampleData.apiKey);
+            console.log("✅ API key schema is valid");
+
+            console.log("All schemas are valid!");
+            process.exit(0);
+          } catch (error) {
+            console.error("❌ Schema validation failed:", error);
+            process.exit(1);
+          }
+          EOF
+
+          # Run the validation script
+          node validate-schemas.js

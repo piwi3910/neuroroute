@@ -1,8 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import createRouterService, { RouterService } from '../../src/services/router';
-import createClassifierService from '../../src/services/classifier';
-import createCacheService from '../../src/services/cache';
+import createRouterService, { RouterService } from '../../src/services/router.js';
+import createClassifierService from '../../src/services/classifier.js';
+import createCacheService from '../../src/services/cache.js';
 
 // Mock dependencies
 jest.mock('../../src/services/classifier');

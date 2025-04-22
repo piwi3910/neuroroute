@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import healthRoutes from '../../src/routes/health';
+import healthRoutes from '../../src/routes/health.js';
 
 describe('Health Endpoint', () => {
   let app: FastifyInstance;

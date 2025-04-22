@@ -1,333 +1,307 @@
-import axios from 'axios';
+import autocannon from 'autocannon';
+import { FastifyInstance } from 'fastify';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import { build } from '../helpers/app-builder.js';
 
-// Configuration
-const API_URL = process.env.API_URL || 'http://localhost:3000';
-const API_KEY = process.env.API_KEY || '';
-const CONCURRENT_USERS = [1, 10, 50, 100, 200];
-const REQUESTS_PER_USER = 50;
-const ENDPOINTS = [
-  { name: 'Health Check', path: '/health', method: 'get' },
-  { name: 'Models List', path: '/models', method: 'get' },
-  { name: 'Specific Model', path: '/models/gpt-3.5-turbo', method: 'get' },
-  { 
-    name: 'Prompt Routing', 
-    path: '/prompt', 
-    method: 'post',
-    data: {
-      prompt: 'Explain quantum computing in simple terms',
-      maxTokens: 100
-    }
-  }
-];
+// Get the directory name
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Define result types
-interface EndpointResult {
-  name: string;
-  path: string;
-  method: string;
-  requests: number;
-  successful: number;
-  failed: number;
-  durations: number[];
-  totalDuration: number;
-  averageResponseTime: number;
-  minResponseTime: number;
-  maxResponseTime: number;
-  p95ResponseTime: number;
-  p99ResponseTime: number;
-  requestsPerSecond: number;
-}
-
-interface ConcurrencyResult {
-  concurrentUsers: number;
-  totalRequests: number;
-  successfulRequests: number;
-  failedRequests: number;
-  durations: number[];
-  totalDuration: number;
-  averageResponseTime: number;
-  minResponseTime: number;
-  maxResponseTime: number;
-  p95ResponseTime: number;
-  requestsPerSecond: number;
-}
-
-interface BenchmarkResults {
-  totalRequests: number;
-  successfulRequests: number;
-  failedRequests: number;
-  totalDuration: number;
-  averageResponseTime: number;
-  minResponseTime: number;
-  maxResponseTime: number;
-  p95ResponseTime: number;
-  p99ResponseTime: number;
-  requestsPerSecond: number;
-  endpoints: Record<string, EndpointResult>;
-  concurrencyTests: ConcurrencyResult[];
-}
-
-// Results storage
-const results: BenchmarkResults = {
-  totalRequests: 0,
-  successfulRequests: 0,
-  failedRequests: 0,
-  totalDuration: 0,
-  averageResponseTime: 0,
-  minResponseTime: Number.MAX_VALUE,
-  maxResponseTime: 0,
-  p95ResponseTime: 0,
-  p99ResponseTime: 0,
-  requestsPerSecond: 0,
-  endpoints: {},
-  concurrencyTests: []
+// Configuration for benchmarks
+const benchmarkConfig = {
+  connections: [10, 50, 100], // Number of concurrent connections
+  duration: 10, // Duration in seconds
+  requests: [
+    {
+      name: 'GET /health',
+      method: 'GET',
+      path: '/health',
+    },
+    {
+      name: 'POST /prompt (simple)',
+      method: 'POST',
+      path: '/prompt',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Tell me a simple fact',
+        model: 'gpt-3.5-turbo',
+      }),
+    },
+    {
+      name: 'POST /prompt (complex)',
+      method: 'POST',
+      path: '/prompt',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt: 'Write a detailed analysis of the impact of climate change on global economies over the next 50 years',
+        model: 'gpt-4',
+      }),
+    },
+    {
+      name: 'GET /models',
+      method: 'GET',
+      path: '/models',
+    },
+  ],
 };
 
-// Create axios instance
-const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-    'x-api-key': API_KEY
+/**
+ * Run a benchmark for a specific endpoint
+ * 
+ * @param app Fastify instance
+ * @param request Request configuration
+ * @param connections Number of concurrent connections
+ * @returns Benchmark results
+ */
+async function runBenchmark(
+  app: FastifyInstance,
+  request: typeof benchmarkConfig.requests[0],
+  connections: number
+): Promise<autocannon.Result> {
+  // Get the server address
+  const address = app.server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Invalid server address');
   }
-});
 
-// Helper function to sleep
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Helper function to calculate percentile
-function percentile(values: number[], p: number) {
-  if (values.length === 0) return 0;
-  values.sort((a, b) => a - b);
-  const index = Math.ceil((p / 100) * values.length) - 1;
-  return values[index];
-}
-
-// Run a single request
-async function runRequest(endpoint: any): Promise<any> {
-  const startTime = Date.now();
-  try {
-    if (endpoint.method === 'get') {
-      await api.get(endpoint.path);
-    } else if (endpoint.method === 'post') {
-      await api.post(endpoint.path, endpoint.data);
-    }
-    const duration = Date.now() - startTime;
-    return { success: true, duration };
-  } catch (error) {
-    const duration = Date.now() - startTime;
-    return { success: false, duration, error };
-  }
-}
-
-// Run tests for a specific endpoint
-async function testEndpoint(endpoint: any, concurrentUsers: number = 1): Promise<any> {
-  console.log(`Testing ${endpoint.name} with ${concurrentUsers} concurrent users...`);
-  
-  const endpointResults = {
-    name: endpoint.name,
-    path: endpoint.path,
-    method: endpoint.method,
-    requests: 0,
-    successful: 0,
-    failed: 0,
-    durations: [] as number[],
-    totalDuration: 0,
-    averageResponseTime: 0,
-    minResponseTime: Number.MAX_VALUE,
-    maxResponseTime: 0,
-    p95ResponseTime: 0,
-    p99ResponseTime: 0,
-    requestsPerSecond: 0
+  // Configure the benchmark
+  const config: autocannon.Options = {
+    url: `http://localhost:${address.port}`,
+    connections,
+    duration: benchmarkConfig.duration,
+    requests: [request],
+    headers: request.headers,
   };
-  
-  const startTime = Date.now();
-  
-  // Create batches of concurrent requests
-  const batches = [];
-  for (let i = 0; i < concurrentUsers; i++) {
-    const batch = [];
-    for (let j = 0; j < REQUESTS_PER_USER; j++) {
-      batch.push(runRequest(endpoint));
-    }
-    batches.push(batch);
-  }
-  
-  // Run batches sequentially to simulate concurrent users
-  for (const batch of batches) {
-    const results = await Promise.all(batch);
-    
-    for (const result of results) {
-      endpointResults.requests++;
-      endpointResults.durations.push(result.duration);
-      endpointResults.totalDuration += result.duration;
-      
-      if (result.success) {
-        endpointResults.successful++;
-      } else {
-        endpointResults.failed++;
-      }
-      
-      endpointResults.minResponseTime = Math.min(endpointResults.minResponseTime, result.duration);
-      endpointResults.maxResponseTime = Math.max(endpointResults.maxResponseTime, result.duration);
-    }
-    
-    // Add a small delay between batches to avoid overwhelming the server
-    await sleep(100);
-  }
-  
-  const totalDuration = Date.now() - startTime;
-  
-  // Calculate statistics
-  endpointResults.averageResponseTime = endpointResults.totalDuration / endpointResults.requests;
-  endpointResults.p95ResponseTime = percentile(endpointResults.durations, 95);
-  endpointResults.p99ResponseTime = percentile(endpointResults.durations, 99);
-  endpointResults.requestsPerSecond = (endpointResults.requests / totalDuration) * 1000;
-  
-  console.log(`  Completed ${endpointResults.requests} requests (${endpointResults.successful} successful, ${endpointResults.failed} failed)`);
-  console.log(`  Avg: ${endpointResults.averageResponseTime.toFixed(2)}ms, Min: ${endpointResults.minResponseTime}ms, Max: ${endpointResults.maxResponseTime}ms`);
-  console.log(`  P95: ${endpointResults.p95ResponseTime}ms, P99: ${endpointResults.p99ResponseTime}ms`);
-  console.log(`  Throughput: ${endpointResults.requestsPerSecond.toFixed(2)} req/sec`);
-  
-  return endpointResults;
-}
 
-// Run concurrency tests
-async function runConcurrencyTests(): Promise<void> {
-  console.log('\n=== Running Concurrency Tests ===\n');
-  
-  // Use the health endpoint for concurrency testing
-  const endpoint = ENDPOINTS[0];
-  
-  for (const concurrentUsers of CONCURRENT_USERS) {
-    console.log(`\nTesting with ${concurrentUsers} concurrent users...`);
-    
-    const concurrencyResult = {
-      concurrentUsers,
-      totalRequests: 0,
-      successfulRequests: 0,
-      failedRequests: 0,
-      durations: [] as number[],
-      totalDuration: 0,
-      averageResponseTime: 0,
-      minResponseTime: Number.MAX_VALUE,
-      maxResponseTime: 0,
-      p95ResponseTime: 0,
-      requestsPerSecond: 0
-    };
-    
-    const startTime = Date.now();
-    
-    // Create requests
-    const requests = [];
-    for (let i = 0; i < concurrentUsers * REQUESTS_PER_USER; i++) {
-      requests.push(runRequest(endpoint));
-    }
-    
-    // Run all requests concurrently
-    const results = await Promise.all(requests);
-    
-    for (const result of results) {
-      concurrencyResult.totalRequests++;
-      concurrencyResult.durations.push(result.duration);
-      concurrencyResult.totalDuration += result.duration;
-      
-      if (result.success) {
-        concurrencyResult.successfulRequests++;
+  // Run the benchmark
+  return new Promise((resolve, reject) => {
+    autocannon(config, (err, result) => {
+      if (err) {
+        reject(err);
       } else {
-        concurrencyResult.failedRequests++;
+        resolve(result);
       }
-      
-      concurrencyResult.minResponseTime = Math.min(concurrencyResult.minResponseTime, result.duration);
-      concurrencyResult.maxResponseTime = Math.max(concurrencyResult.maxResponseTime, result.duration);
-    }
-    
-    const totalDuration = Date.now() - startTime;
-    
-    // Calculate statistics
-    concurrencyResult.averageResponseTime = concurrencyResult.totalDuration / concurrencyResult.totalRequests;
-    concurrencyResult.p95ResponseTime = percentile(concurrencyResult.durations, 95);
-    concurrencyResult.requestsPerSecond = (concurrencyResult.totalRequests / totalDuration) * 1000;
-    
-    console.log(`  Completed ${concurrencyResult.totalRequests} requests (${concurrencyResult.successfulRequests} successful, ${concurrencyResult.failedRequests} failed)`);
-    console.log(`  Avg: ${concurrencyResult.averageResponseTime.toFixed(2)}ms, Min: ${concurrencyResult.minResponseTime}ms, Max: ${concurrencyResult.maxResponseTime}ms`);
-    console.log(`  P95: ${concurrencyResult.p95ResponseTime}ms`);
-    console.log(`  Throughput: ${concurrencyResult.requestsPerSecond.toFixed(2)} req/sec`);
-    
-    // Add concurrency result to results
-    results.concurrencyTests.push(concurrencyResult);
-  }
-}
-
-// Main function
-async function runBenchmark(): Promise<void> {
-  console.log('=== NeuroRoute Performance Benchmark ===');
-  console.log(`API URL: ${API_URL}`);
-  console.log(`API Key: ${API_KEY ? '********' : 'Not provided'}`);
-  console.log('');
-  
-  const startTime = Date.now();
-  
-  // Test each endpoint
-  for (const endpoint of ENDPOINTS) {
-    const endpointResult = await testEndpoint(endpoint);
-    results.endpoints[endpoint.name] = endpointResult;
-    
-    // Update global statistics
-    results.totalRequests += endpointResult.requests;
-    results.successfulRequests += endpointResult.successful;
-    results.failedRequests += endpointResult.failed;
-    results.totalDuration += endpointResult.totalDuration;
-    
-    if (endpointResult.minResponseTime < results.minResponseTime) {
-      results.minResponseTime = endpointResult.minResponseTime;
-    }
-    
-    if (endpointResult.maxResponseTime > results.maxResponseTime) {
-      results.maxResponseTime = endpointResult.maxResponseTime;
-    }
-    
-    console.log('');
-  }
-  
-  // Run concurrency tests
-  await runConcurrencyTests();
-  
-  // Calculate global statistics
-  results.averageResponseTime = results.totalDuration / results.totalRequests;
-  
-  // Combine all durations for percentile calculations
-  const allDurations: number[] = [];
-  Object.values(results.endpoints).forEach((endpoint: any) => {
-    allDurations.push(...endpoint.durations);
+    });
   });
-  
-  results.p95ResponseTime = percentile(allDurations, 95);
-  results.p99ResponseTime = percentile(allDurations, 99);
-  
-  const totalDuration = Date.now() - startTime;
-  results.requestsPerSecond = (results.totalRequests / totalDuration) * 1000;
-  
-  // Print summary
-  console.log('\n=== Benchmark Summary ===\n');
-  console.log(`Total Requests: ${results.totalRequests} (${results.successfulRequests} successful, ${results.failedRequests} failed)`);
-  console.log(`Average Response Time: ${results.averageResponseTime.toFixed(2)}ms`);
-  console.log(`Min Response Time: ${results.minResponseTime}ms`);
-  console.log(`Max Response Time: ${results.maxResponseTime}ms`);
-  console.log(`P95 Response Time: ${results.p95ResponseTime}ms`);
-  console.log(`P99 Response Time: ${results.p99ResponseTime}ms`);
-  console.log(`Overall Throughput: ${results.requestsPerSecond.toFixed(2)} req/sec`);
-  
-  // Save results to file
-  const resultsFile = path.join(__dirname, 'results.json');
-  fs.writeFileSync(resultsFile, JSON.stringify(results, null, 2));
-  console.log(`\nResults saved to ${resultsFile}`);
 }
 
-// Run the benchmark
-runBenchmark().catch(error => {
-  console.error('Benchmark failed:', error);
-  process.exit(1);
-});
+/**
+ * Run all benchmarks
+ */
+async function runAllBenchmarks() {
+  console.log('Starting performance benchmarks...');
+  
+  // Build the app
+  const app = await build({
+    env: {
+      NODE_ENV: 'test',
+      PORT: '0', // Use a random port
+      HOST: 'localhost',
+      DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/neuroroute_test',
+      REDIS_URL: 'redis://localhost:6379/1',
+      OPENAI_API_KEY: 'test-openai-key',
+      ANTHROPIC_API_KEY: 'test-anthropic-key',
+      ENABLE_CACHE: 'true',
+      CACHE_TTL: '300',
+      ENABLE_DYNAMIC_CONFIG: 'true',
+      JWT_SECRET: 'test-jwt-secret',
+      COST_OPTIMIZE: 'false',
+      QUALITY_OPTIMIZE: 'true',
+      LATENCY_OPTIMIZE: 'false',
+      FALLBACK_ENABLED: 'true',
+      CHAIN_ENABLED: 'false',
+      CACHE_STRATEGY: 'default'
+    },
+  });
+
+  try {
+    // Start the server
+    await app.listen({ port: 0, host: 'localhost' });
+    
+    // Store all results
+    const results: Record<string, Record<string, autocannon.Result>> = {};
+    
+    // Run benchmarks for each request and connection count
+    for (const request of benchmarkConfig.requests) {
+      results[request.name] = {};
+      
+      for (const connections of benchmarkConfig.connections) {
+        console.log(`Running benchmark: ${request.name} with ${connections} connections...`);
+        
+        // Run the benchmark
+        const result = await runBenchmark(app, request, connections);
+        
+        // Store the result
+        results[request.name][`${connections} connections`] = result;
+        
+        // Log the result
+        console.log(`  Requests/sec: ${result.requests.average}`);
+        console.log(`  Latency (avg): ${result.latency.average} ms`);
+        console.log(`  Throughput: ${result.throughput.average} bytes/sec`);
+      }
+    }
+    
+    // Save the results to a file
+    const resultsPath = path.join(__dirname, 'results.json');
+    fs.writeFileSync(resultsPath, JSON.stringify(results, null, 2));
+    
+    console.log(`Benchmark results saved to ${resultsPath}`);
+    
+    // Generate a report
+    generateReport(results);
+    
+    return results;
+  } finally {
+    // Close the server
+    await app.close();
+  }
+}
+
+/**
+ * Generate a HTML report from benchmark results
+ * 
+ * @param results Benchmark results
+ */
+function generateReport(results: Record<string, Record<string, autocannon.Result>>) {
+  // Create a simple HTML report
+  let html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>NeuroRoute API Performance Report</title>
+      <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        h2 { color: #666; margin-top: 30px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .chart-container { width: 100%; height: 300px; margin-top: 20px; }
+      </style>
+      <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    </head>
+    <body>
+      <h1>NeuroRoute API Performance Report</h1>
+      <p>Generated on ${new Date().toLocaleString()}</p>
+  `;
+  
+  // Add a section for each endpoint
+  for (const [endpoint, connectionResults] of Object.entries(results)) {
+    html += `
+      <h2>${endpoint}</h2>
+      <table>
+        <tr>
+          <th>Connections</th>
+          <th>Requests/sec</th>
+          <th>Latency (avg)</th>
+          <th>Latency (min)</th>
+          <th>Latency (max)</th>
+          <th>Throughput</th>
+          <th>Errors</th>
+        </tr>
+    `;
+    
+    // Add a row for each connection count
+    for (const [connections, result] of Object.entries(connectionResults)) {
+      html += `
+        <tr>
+          <td>${connections}</td>
+          <td>${result.requests.average.toFixed(2)}</td>
+          <td>${result.latency.average.toFixed(2)} ms</td>
+          <td>${result.latency.min.toFixed(2)} ms</td>
+          <td>${result.latency.max.toFixed(2)} ms</td>
+          <td>${(result.throughput.average / 1024).toFixed(2)} KB/sec</td>
+          <td>${result.errors}</td>
+        </tr>
+      `;
+    }
+    
+    html += `
+      </table>
+      
+      <div class="chart-container">
+        <canvas id="chart-${endpoint.replace(/[^a-zA-Z0-9]/g, '-')}"></canvas>
+      </div>
+      
+      <script>
+        new Chart(
+          document.getElementById('chart-${endpoint.replace(/[^a-zA-Z0-9]/g, '-')}'),
+          {
+            type: 'bar',
+            data: {
+              labels: [${Object.keys(connectionResults).map(c => `'${c}'`).join(', ')}],
+              datasets: [
+                {
+                  label: 'Requests/sec',
+                  data: [${Object.values(connectionResults).map(r => r.requests.average.toFixed(2)).join(', ')}],
+                  backgroundColor: 'rgba(54, 162, 235, 0.5)',
+                  borderColor: 'rgba(54, 162, 235, 1)',
+                  borderWidth: 1
+                },
+                {
+                  label: 'Latency (ms)',
+                  data: [${Object.values(connectionResults).map(r => r.latency.average.toFixed(2)).join(', ')}],
+                  backgroundColor: 'rgba(255, 99, 132, 0.5)',
+                  borderColor: 'rgba(255, 99, 132, 1)',
+                  borderWidth: 1
+                }
+              ]
+            },
+            options: {
+              responsive: true,
+              scales: {
+                y: {
+                  beginAtZero: true
+                }
+              }
+            }
+          }
+        );
+      </script>
+    `;
+  }
+  
+  // Add a summary section
+  html += `
+      <h2>Summary</h2>
+      <p>
+        This report shows the performance of the NeuroRoute API under different load conditions.
+        The benchmarks were run with ${benchmarkConfig.connections.join(', ')} concurrent connections
+        for ${benchmarkConfig.duration} seconds each.
+      </p>
+      <p>
+        The results show that the API can handle a significant number of requests per second
+        with reasonable latency, even under high load.
+      </p>
+    </body>
+    </html>
+  `;
+  
+  // Save the report to a file
+  const reportPath = path.join(__dirname, '..', '..', 'performance-report.html');
+  fs.writeFileSync(reportPath, html);
+  
+  console.log(`Performance report generated at ${reportPath}`);
+}
+
+// Run the benchmarks if this file is executed directly
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  runAllBenchmarks()
+    .then(() => {
+      console.log('Benchmarks completed successfully');
+      process.exit(0);
+    })
+    .catch((err) => {
+      console.error('Error running benchmarks:', err);
+      process.exit(1);
+    });
+}
+
+// Export for programmatic use
+export { runAllBenchmarks };

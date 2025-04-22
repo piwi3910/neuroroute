@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import createCacheService, { CacheService } from '../../src/services/cache';
+import createCacheService, { CacheService } from '../../src/services/cache.js';
 
 describe('Cache Service', () => {
   let app: FastifyInstance;

@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { AppConfig } from '../config';
+import { AppConfig } from '../config.js';
 
 declare module 'fastify' {
   interface FastifyInstance {

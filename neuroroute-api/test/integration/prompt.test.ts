@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import promptRoutes from '../../src/routes/prompt';
-import createRouterService from '../../src/services/router';
+import promptRoutes from '../../src/routes/prompt.js';
+import createRouterService from '../../src/services/router.js';
 
 // Mock the router service
 jest.mock('../../src/services/router');

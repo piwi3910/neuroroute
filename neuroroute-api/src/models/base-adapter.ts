@@ -1,5 +1,16 @@
 import { FastifyInstance } from 'fastify';
 
+// Type for raw provider responses
+export type RawProviderResponse = Record<string, unknown>;
+
+// Model details interface
+export interface ModelDetails {
+  provider: string;
+  version: string;
+  contextWindow: number;
+  [key: string]: unknown; // Index signature for additional properties
+}
+
 // Model response interface
 export interface ModelResponse {
   text: string;
@@ -10,7 +21,7 @@ export interface ModelResponse {
   };
   model: string;
   processingTime: number;
-  raw?: any; // Raw response from the provider
+  raw?: RawProviderResponse; // Raw response from the provider
 }
 
 // Streaming chunk interface
@@ -32,6 +43,10 @@ export interface ModelRequestOptions {
   presencePenalty?: number;
   stop?: string[];
   stream?: boolean;
+  // Error handling and retry options
+  maxRetries?: number;
+  initialBackoff?: number;
+  timeoutMs?: number;
 }
 
 // Base model adapter interface
@@ -68,7 +83,7 @@ export abstract class BaseModelAdapter {
    * Get model details
    * @returns Model details object
    */
-  abstract getDetails(): Record<string, any>;
+  abstract getDetails(): ModelDetails;
 
   /**
    * Generate a completion for a prompt

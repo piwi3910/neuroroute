@@ -1,8 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
 import axios from 'axios';
-import createOpenAIAdapter, { OpenAIAdapter } from '../../src/models/openai-adapter';
-import { ModelResponse } from '../../src/models/base-adapter';
+import createOpenAIAdapter, { OpenAIAdapter } from '../../src/models/openai-adapter.js';
+import { ModelResponse } from '../../src/models/base-adapter.js';
 
 // Mock axios
 jest.mock('axios');

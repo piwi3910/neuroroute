@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { ConfigManager, createConfigManager } from '../../src/services/config-manager';
-import { AppConfig } from '../../src/config';
+import { ConfigManager, createConfigManager } from '../../src/services/config-manager.js';
+import { AppConfig } from '../../src/config.js';
 
 describe('ConfigManager', () => {
   let fastifyMock: FastifyInstance;

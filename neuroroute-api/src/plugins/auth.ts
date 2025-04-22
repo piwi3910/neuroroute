@@ -1,7 +1,7 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply } from 'fastify';
 import fastifyJwt from '@fastify/jwt';
-import createApiKeyService from '../services/api-key';
-import createUserService from '../services/user';
+import createApiKeyService from '../services/api-key.js';
+import createUserService from '../services/user.js';
 
 /**
  * Authentication plugin for Fastify

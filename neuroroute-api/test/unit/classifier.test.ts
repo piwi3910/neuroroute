@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import createClassifierService, { ClassifierService } from '../../src/services/classifier';
+import createClassifierService, { ClassifierService } from '../../src/services/classifier.js';
 
 describe('Classifier Service', () => {
   let app: FastifyInstance;

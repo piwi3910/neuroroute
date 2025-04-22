@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import axios from 'axios';
-import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk } from './base-adapter';
+import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk } from './base-adapter.js';
 
 // LM Studio API response interface
 interface LMStudioResponse {
@@ -33,10 +33,9 @@ export class LMStudioAdapter extends BaseModelAdapter {
   constructor(fastify: FastifyInstance, modelId: string) {
     super(fastify, modelId);
     
-    // Get configuration from environment
-    const config = (fastify as any).config;
-    this.baseUrl = config?.LMSTUDIO_URL || 'http://localhost:1234/v1';
-    this.timeout = config?.LMSTUDIO_TIMEOUT || 60000; // Default 60 second timeout
+    // Initialize with default values, will be loaded on demand
+    this.baseUrl = 'http://localhost:1234/v1';
+    this.timeout = 60000; // Default 60 second timeout
     
     // Set capabilities based on model
     this.capabilities = ['text-generation'];
@@ -50,6 +49,45 @@ export class LMStudioAdapter extends BaseModelAdapter {
       version: 'local',
       contextWindow: 4096, // Default context window, can be overridden based on model
     };
+    
+    // Load configuration
+    this.loadConfig();
+  }
+  
+  /**
+   * Load configuration from config manager or environment
+   */
+  private async loadConfig(): Promise<void> {
+    try {
+      // Get config manager
+      const configManager = this.fastify.configManager;
+      
+      if (configManager) {
+        // Try to get URL from config manager
+        const url = await configManager.get<string>('LMSTUDIO_URL', this.baseUrl);
+        if (url) {
+          this.baseUrl = url;
+        }
+        
+        // Try to get timeout from config manager
+        const timeout = await configManager.get<number>('LMSTUDIO_TIMEOUT', this.timeout);
+        if (timeout) {
+          this.timeout = timeout;
+        }
+      } else {
+        // Fall back to environment variables
+        const config = (this.fastify as any).config;
+        this.baseUrl = config?.LMSTUDIO_URL || this.baseUrl;
+        this.timeout = config?.LMSTUDIO_TIMEOUT || this.timeout;
+      }
+    } catch (error) {
+      this.fastify.log.error(error, 'Failed to load LMStudio configuration');
+      
+      // Fall back to environment variables
+      const config = (this.fastify as any).config;
+      this.baseUrl = config?.LMSTUDIO_URL || this.baseUrl;
+      this.timeout = config?.LMSTUDIO_TIMEOUT || this.timeout;
+    }
   }
 
   /**
@@ -57,6 +95,11 @@ export class LMStudioAdapter extends BaseModelAdapter {
    * @returns True if the model is available
    */
   async isAvailable(): Promise<boolean> {
+    // If configuration is not loaded yet, try to load it
+    if (!this.baseUrl) {
+      await this.loadConfig();
+    }
+    
     try {
       const response = await axios.get(`${this.baseUrl}/models`, {
         timeout: 5000, // Short timeout for health check

@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import modelsRoutes from '../../src/routes/models';
+import modelsRoutes from '../../src/routes/models.js';
 
 describe('Models Endpoint', () => {
   let app: FastifyInstance;

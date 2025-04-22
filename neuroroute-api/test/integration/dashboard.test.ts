@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import Fastify from 'fastify';
-import dashboardRoutes from '../../src/routes/dashboard';
-import { metrics, resetMetrics, trackModelUsage } from '../../src/utils/logger';
+import dashboardRoutes from '../../src/routes/dashboard.js';
+import { metrics, resetMetrics, trackModelUsage } from '../../src/utils/logger.js';
 
 describe('Dashboard API Endpoints', () => {
   let app: FastifyInstance;

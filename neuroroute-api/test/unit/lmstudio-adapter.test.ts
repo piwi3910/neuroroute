@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import axios from 'axios';
-import { LMStudioAdapter, createLMStudioAdapter } from '../../src/models/lmstudio-adapter';
-import { StreamingChunk } from '../../src/models/base-adapter';
+import { LMStudioAdapter, createLMStudioAdapter } from '../../src/models/lmstudio-adapter.js';
+import { StreamingChunk } from '../../src/models/base-adapter.js';
 
 // Mock axios
 jest.mock('axios');
