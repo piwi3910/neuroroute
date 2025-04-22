@@ -19,8 +19,13 @@ const envPlugin: FastifyPluginAsync = async (fastify) => {
   // Get the merged configuration
   const config = getConfig();
   
-  // Decorate the fastify instance with the config
-  fastify.decorate('config', config);
+  // Decorate the fastify instance with the config if it doesn't already exist
+  if (!fastify.hasDecorator('config')) {
+    fastify.decorate('config', config);
+  } else {
+    // If it exists, update it with our config
+    Object.assign(fastify.config, config);
+  }
   
   // Log environment configuration (excluding sensitive data)
   const {
