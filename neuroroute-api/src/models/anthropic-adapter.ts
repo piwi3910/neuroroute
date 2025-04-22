@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import axios from 'axios';
-import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk } from './base-adapter.js';
+import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk, ModelDetails } from './base-adapter.js';
 
 // Anthropic API response interface
 interface AnthropicResponse {
@@ -15,6 +15,7 @@ interface AnthropicResponse {
     input_tokens: number;
     output_tokens: number;
   };
+  [key: string]: unknown; // Index signature for additional properties
 }
 
 // Anthropic model adapter
@@ -22,7 +23,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
   private apiKey: string;
   private baseUrl: string;
   private capabilities: string[];
-  private details: Record<string, any>;
+  private details: ModelDetails;
 
   constructor(fastify: FastifyInstance, modelId: string) {
     super(fastify, modelId);
@@ -40,7 +41,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
     // Set model details
     this.details = {
       provider: 'Anthropic',
-      version: modelId.includes('-') ? modelId.split('-').pop() : 'latest',
+      version: modelId.includes('-') ? modelId.split('-').pop() || 'latest' : 'latest',
       contextWindow: modelId.includes('claude-3-opus') ? 100000 :
                     modelId.includes('claude-3-sonnet') ? 200000 :
                     modelId.includes('claude-3-haiku') ? 200000 : 100000,
@@ -103,7 +104,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
    * Get model details
    * @returns Model details object
    */
-  getDetails(): Record<string, any> {
+  getDetails(): ModelDetails {
     return { ...this.details };
   }
 
@@ -130,8 +131,21 @@ export class AnthropicAdapter extends BaseModelAdapter {
       }
 
       // Prepare request
+      // Add date suffix to model name if not already present
+      let modelName = this.modelId;
+      if (!modelName.includes('-202')) {
+        // Add date suffix based on model
+        if (modelName.includes('opus')) {
+          modelName = 'claude-3-opus-20240229';
+        } else if (modelName.includes('sonnet')) {
+          modelName = 'claude-3-sonnet-20240229';
+        } else if (modelName.includes('haiku')) {
+          modelName = 'claude-3-haiku-20240229';
+        }
+      }
+      
       const requestOptions = {
-        model: this.modelId,
+        model: modelName,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: options?.maxTokens || 1024,
         temperature: options?.temperature || 0.7,
@@ -226,8 +240,21 @@ export class AnthropicAdapter extends BaseModelAdapter {
       }
 
       // Prepare request
+      // Add date suffix to model name if not already present
+      let modelName = this.modelId;
+      if (!modelName.includes('-202')) {
+        // Add date suffix based on model
+        if (modelName.includes('opus')) {
+          modelName = 'claude-3-opus-20240229';
+        } else if (modelName.includes('sonnet')) {
+          modelName = 'claude-3-sonnet-20240229';
+        } else if (modelName.includes('haiku')) {
+          modelName = 'claude-3-haiku-20240229';
+        }
+      }
+      
       const requestOptions = {
-        model: this.modelId,
+        model: modelName,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: options?.maxTokens || 1024,
         temperature: options?.temperature || 0.7,
