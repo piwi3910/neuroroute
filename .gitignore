@@ -42,6 +42,7 @@ cache_data/
 .pytest_cache/
 
 # Environment variables
+.env
 .env.local
 .env.development
 .env.test
