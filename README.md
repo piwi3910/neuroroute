@@ -1,4 +1,4 @@
-# NeuroRoute v0.0.1
+# NeuroRoute
 
 NeuroRoute is an intelligent routing layer that receives prompts and intelligently forwards them to the best-suited LLM backend based on intent, complexity, and required features. The goal is to optimize for cost, speed, and capability, while keeping the system modular and easy to extend.
 
@@ -12,6 +12,7 @@ NeuroRoute is an intelligent routing layer that receives prompts and intelligent
 - **Redis Caching**: Optional caching of responses for improved performance
 - **Comprehensive Logging**: Detailed logging of prompts, responses, and metrics
 - **Modular Design**: Easy to extend with new models and classification strategies
+- **Secure API Key Storage**: Store API keys securely in a local database
 
 ## Installation
 
@@ -39,7 +40,7 @@ NeuroRoute is an intelligent routing layer that receives prompts and intelligent
    # Copy the example .env file
    cp .env.example .env
    
-   # Edit the .env file with your API keys
+   # Edit the .env file with your API keys (optional, can also use API endpoints)
    nano .env
    ```
 
@@ -59,27 +60,30 @@ NeuroRoute is an intelligent routing layer that receives prompts and intelligent
 
 ## Secure API Key Management
 
-NeuroRoute requires API keys for OpenAI and Anthropic services. To ensure these keys remain secure:
+NeuroRoute provides two methods for managing API keys:
+
+### 1. Database Storage (Recommended)
+
+API keys are stored securely in a local SQLite database:
+
+- Keys are not exposed in environment variables or configuration files
+- Database files are automatically excluded from git
+- API endpoints allow for easy management of keys
+
+### 2. Environment Variables
+
+For backward compatibility, API keys can still be provided via environment variables:
+
+- The `.env` file is included in `.gitignore` to prevent accidental commits
+- Always use `.env.example` with placeholder values in version control
+
+### Best Practices
 
 1. **Never commit API keys to Git**
-   - The `.env` file is included in `.gitignore` to prevent accidental commits
-   - Always use `.env.example` with placeholder values in version control
-
 2. **Rotate API keys regularly**
-   - Periodically generate new API keys and update your local `.env` file
-   - Revoke old keys after rotation
-
 3. **Use environment-specific keys**
-   - Use different API keys for development, testing, and production
-   - Consider using API key management services for production environments
-
 4. **Monitor API key usage**
-   - Regularly check your API usage dashboards for unusual activity
-   - Set up billing alerts to prevent unexpected charges
-
 5. **Limit API key permissions**
-   - When possible, use scoped API keys with minimal required permissions
-   - Create separate keys for different services or components
 
 ## Usage
 
@@ -158,6 +162,104 @@ Response:
 }
 ```
 
+#### API Key Management
+
+##### List All API Keys
+
+```http
+GET /api-keys/
+```
+
+Response:
+
+```json
+[
+  {
+    "provider": "openai",
+    "api_key": "sk-...",
+    "is_active": true,
+    "id": 1
+  },
+  {
+    "provider": "anthropic",
+    "api_key": "sk-ant-...",
+    "is_active": true,
+    "id": 2
+  }
+]
+```
+
+##### Get API Key for a Provider
+
+```http
+GET /api-keys/{provider}
+```
+
+Response:
+
+```json
+{
+  "provider": "openai",
+  "api_key": "sk-...",
+  "is_active": true,
+  "id": 1
+}
+```
+
+##### Create or Update API Key
+
+```http
+POST /api-keys/
+Content-Type: application/json
+
+{
+  "provider": "openai",
+  "api_key": "sk-...",
+  "is_active": true
+}
+```
+
+Response:
+
+```json
+{
+  "provider": "openai",
+  "api_key": "sk-...",
+  "is_active": true,
+  "id": 1
+}
+```
+
+##### Update API Key
+
+```http
+PUT /api-keys/{provider}
+Content-Type: application/json
+
+{
+  "provider": "openai",
+  "api_key": "sk-...",
+  "is_active": true
+}
+```
+
+Response:
+
+```json
+{
+  "provider": "openai",
+  "api_key": "sk-...",
+  "is_active": true,
+  "id": 1
+}
+```
+
+##### Delete API Key
+
+```http
+DELETE /api-keys/{provider}
+```
+
 #### Health Check
 
 ```http
@@ -174,6 +276,13 @@ neuroroute/
 ├── classifier.py            # Prompt classification logic
 ├── cache.py                 # Redis wrapper
 ├── config.py                # Model registry, API keys, etc.
+├── api_keys.py              # API key management endpoints
+│
+├── db/
+│   ├── __init__.py          # Database package initialization
+│   ├── database.py          # Database connection and session management
+│   ├── models.py            # SQLAlchemy models
+│   └── crud.py              # Database operations
 │
 ├── models/
 │   ├── base_adapter.py      # Base adapter interface
@@ -185,6 +294,7 @@ neuroroute/
 │   └── logger.py            # Logging utilities
 │
 ├── logs/                    # Log files
+├── db_data/                 # Database files
 ├── requirements.txt         # Project dependencies
 └── README.md                # Project documentation
 ```
