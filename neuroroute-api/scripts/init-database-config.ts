@@ -100,8 +100,8 @@ async function initializeModelConfigs() {
   
   const defaultModels = [
     {
-      id: 'gpt-4',
-      name: 'GPT-4',
+      id: 'gpt-4.1',
+      name: 'GPT-4.1',
       provider: 'openai',
       enabled: true,
       priority: 3,
@@ -114,59 +114,17 @@ async function initializeModelConfigs() {
       }
     },
     {
-      id: 'gpt-3.5-turbo',
-      name: 'GPT-3.5 Turbo',
-      provider: 'openai',
-      enabled: true,
-      priority: 2,
-      capabilities: ['text-generation', 'code-generation'],
-      config: {
-        cost: 0.002,
-        quality: 0.8,
-        maxTokens: 4096,
-        latency: 1000
-      }
-    },
-    {
-      id: 'claude-3-opus',
-      name: 'Claude 3 Opus',
+      id: 'claude-3-7-sonnet-latest',
+      name: 'Claude 3.7 Sonnet',
       provider: 'anthropic',
       enabled: true,
       priority: 3,
       capabilities: ['text-generation', 'code-generation', 'reasoning', 'knowledge-retrieval'],
       config: {
         cost: 0.025,
-        quality: 0.93,
-        maxTokens: 100000,
-        latency: 2500
-      }
-    },
-    {
-      id: 'claude-3-sonnet',
-      name: 'Claude 3 Sonnet',
-      provider: 'anthropic',
-      enabled: true,
-      priority: 2,
-      capabilities: ['text-generation', 'code-generation', 'reasoning'],
-      config: {
-        cost: 0.015,
-        quality: 0.9,
-        maxTokens: 100000,
-        latency: 1800
-      }
-    },
-    {
-      id: 'claude-3-haiku',
-      name: 'Claude 3 Haiku',
-      provider: 'anthropic',
-      enabled: true,
-      priority: 1,
-      capabilities: ['text-generation'],
-      config: {
-        cost: 0.003,
-        quality: 0.85,
-        maxTokens: 100000,
-        latency: 1200
+        quality: 0.95,
+        maxTokens: 200000,
+        latency: 2000
       }
     },
     {
