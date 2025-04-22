@@ -7,6 +7,26 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    networks:
+      - neuroroute-network
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: neuroroute
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - neuroroute-network
+
+networks:
+  neuroroute-network:
+    driver: bridge
 
 volumes:
   redis_data:
+  postgres_data:
