@@ -3,7 +3,9 @@ import json
 from enum import Enum, auto
 from typing import Dict, Any, List, Optional, Union, Set, Literal
 from functools import lru_cache
-from pydantic import BaseSettings, Field, validator, root_validator
+from pydantic import Field
+from pydantic_settings import BaseSettings
+from pydantic import validator, root_validator
 import logging
 
 # Intent keywords for classification (will be used by the classifier)
@@ -299,10 +301,13 @@ class Settings(BaseSettings):
                 
         return values
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = False
-        env_nested_delimiter = "__"  # This allows env vars like LOG__LEVEL=DEBUG
+    model_config = {
+        "env_file": ".env",
+        "case_sensitive": False,
+        "env_nested_delimiter": "__",  # This allows env vars like LOG__LEVEL=DEBUG
+        "extra": "allow",  # Allow extra fields for backward compatibility
+        "populate_by_name": True  # Allow population by field name as well as alias
+    }
 
 @lru_cache()
 def get_settings():
@@ -461,7 +466,7 @@ def get_redis_config(settings: Settings) -> Dict[str, Any]:
 def get_log_config(settings: Settings) -> Dict[str, Any]:
     """Get logging configuration from settings."""
     # Convert Pydantic settings to dict for compatibility
-    return settings.log.dict()
+    return settings.log.model_dump()
 
 # Create a function to get monitoring config from settings
 def get_monitoring_config(settings: Settings) -> Dict[str, Any]:

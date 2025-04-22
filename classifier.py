@@ -541,8 +541,9 @@ class PromptClassifier:
         return selected_model, classification_info
 
 
-# Factory function with caching for better performance
-@lru_cache()
+# Singleton instance for better performance
+_classifier_instance = None
+
 def get_classifier(settings: Optional[Settings] = None) -> PromptClassifier:
     """
     Factory function to create or return cached PromptClassifier instance.
@@ -554,4 +555,7 @@ def get_classifier(settings: Optional[Settings] = None) -> PromptClassifier:
     Returns:
         PromptClassifier instance
     """
-    return PromptClassifier(settings)
+    global _classifier_instance
+    if _classifier_instance is None:
+        _classifier_instance = PromptClassifier(settings)
+    return _classifier_instance

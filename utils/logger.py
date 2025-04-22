@@ -24,8 +24,8 @@ def setup_logger(settings: Optional[Settings] = None):
     log_config = get_log_config(settings)
     
     # Get configuration values
-    log_level = log_config["level"]
-    log_format = log_config["format"]
+    log_level = log_config["log_level"]
+    log_format = log_config["log_format"]
     log_dir = log_config["log_dir"]
     
     # Ensure log directory exists

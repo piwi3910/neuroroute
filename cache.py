@@ -411,8 +411,9 @@ class Cache:
         logger.info("Redis connections closed.")
 
 
-# Factory function with caching for better performance
-@lru_cache()
+# Singleton instance for better performance
+_cache_instance = None
+
 def get_cache(settings: Optional[Settings] = None) -> Cache:
     """
     Factory function to create or return cached Cache instance.
@@ -424,4 +425,7 @@ def get_cache(settings: Optional[Settings] = None) -> Cache:
     Returns:
         Cache instance
     """
-    return Cache(settings)
+    global _cache_instance
+    if _cache_instance is None:
+        _cache_instance = Cache(settings)
+    return _cache_instance

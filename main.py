@@ -56,10 +56,13 @@ async def lifespan(app: FastAPI):
         logger.error(f"Error during shutdown: {e}")
 
 # Initialize FastAPI app
+# Get settings once to avoid multiple calls
+settings = get_settings()
+
 app = FastAPI(
     title="NeuroRoute",
     description="Intelligent LLM Router API that forwards prompts to the best-suited LLM backend based on intent, complexity, and required features",
-    version=get_settings().app_version,
+    version=settings.api.app_version or "0.1.0",  # Provide a default version if not set
     lifespan=lifespan,
     docs_url="/docs",
     redoc_url="/redoc",
