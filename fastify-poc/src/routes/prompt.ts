@@ -1,8 +1,19 @@
 import { FastifyPluginAsync } from 'fastify';
+import createRouterService from '../services/router';
 
-// Prompt routing endpoint
+/**
+ * Prompt routing endpoint
+ *
+ * This endpoint routes prompts to the appropriate model based on
+ * intent classification and model capabilities.
+ */
 const promptRoutes: FastifyPluginAsync = async (fastify) => {
+  // Create router service
+  const routerService = createRouterService(fastify);
+  
+  // Add route with authentication
   fastify.post('/', {
+    onRequest: [fastify.authenticate],
     schema: {
       description: 'Route a prompt to the appropriate model',
       tags: ['prompt'],
@@ -58,37 +69,81 @@ const promptRoutes: FastifyPluginAsync = async (fastify) => {
           temperature?: number;
         };
 
-        // In a real implementation, this would use the router service to:
-        // 1. Classify the prompt
-        // 2. Select the appropriate model
-        // 3. Send the prompt to the model
-        // 4. Return the response
-
-        // For this proof of concept, we'll just simulate a response
-        const selectedModel = model_id || 'gpt-4';
-        const simulatedResponse = `This is a simulated response to: "${prompt}"`;
+        // Validate prompt
+        if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
+          reply.code(400);
+          return {
+            error: 'Prompt is required and must be a non-empty string',
+            code: 'INVALID_PROMPT',
+            requestId: request.id,
+          };
+        }
         
-        // Simulate token counting
-        const promptTokens = Math.ceil(prompt.length / 4);
-        const completionTokens = Math.ceil(simulatedResponse.length / 4);
+        // Log request
+        request.log.info({
+          promptLength: prompt.length,
+          modelId: model_id,
+          maxTokens: max_tokens,
+          temperature,
+          apiKeyId: request.apiKey?.id,
+        }, 'Processing prompt');
+        
+        // Use router service to process the prompt
+        const result = await routerService.routePrompt(
+          prompt,
+          model_id,
+          max_tokens,
+          temperature
+        );
         
         const processingTime = (Date.now() - startTime) / 1000;
-
-        return {
-          response: simulatedResponse,
-          model_used: selectedModel,
-          tokens: {
-            prompt: promptTokens,
-            completion: completionTokens,
-            total: promptTokens + completionTokens,
-          },
+        
+        // Add processing time to the response
+        const response = {
+          ...result,
           processing_time: processingTime,
+          request_id: request.id,
         };
-      } catch (error) {
-        fastify.log.error(error);
-        reply.code(500);
+        
+        // Log response
+        request.log.info({
+          modelUsed: result.model_used,
+          tokens: result.tokens,
+          processingTime,
+        }, 'Prompt processed successfully');
+        
+        return response;
+      } catch (error: unknown) {
+        // Log error
+        request.log.error(error, 'Error processing prompt');
+        
+        // Determine status code and error details
+        let statusCode = 500;
+        let errorMessage = 'An error occurred while processing the prompt';
+        let errorCode = 'INTERNAL_ERROR';
+        
+        // Handle known error types
+        if (error && typeof error === 'object') {
+          if ('statusCode' in error && typeof error.statusCode === 'number') {
+            statusCode = error.statusCode;
+          }
+          
+          if ('message' in error && typeof error.message === 'string') {
+            errorMessage = error.message;
+          }
+          
+          if ('code' in error && typeof error.code === 'string') {
+            errorCode = error.code;
+          }
+        }
+        
+        reply.code(statusCode);
+        
+        // Return error response
         return {
-          error: 'An error occurred while processing the prompt',
+          error: errorMessage,
+          code: errorCode,
+          request_id: request.id,
         };
       }
     },
