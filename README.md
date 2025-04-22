@@ -1,4 +1,4 @@
-# NeuroRoute
+# NeuroRoute v0.0.1
 
 NeuroRoute is an intelligent routing layer that receives prompts and intelligently forwards them to the best-suited LLM backend based on intent, complexity, and required features. The goal is to optimize for cost, speed, and capability, while keeping the system modular and easy to extend.
 
@@ -50,7 +50,11 @@ NeuroRoute is an intelligent routing layer that receives prompts and intelligent
 
 5. Start Redis (optional, for caching)
    ```bash
+   # Option 1: Using Redis server directly
    redis-server
+   
+   # Option 2: Using Docker Compose
+   docker-compose up -d redis
    ```
 
 ## Secure API Key Management
