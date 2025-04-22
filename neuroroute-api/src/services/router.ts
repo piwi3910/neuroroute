@@ -261,28 +261,6 @@ export class RouterService {
         latency: 2000,
         priority: 3
       },
-      'gpt-4': {
-        id: 'gpt-4',
-        provider: 'openai',
-        capabilities: ['text-generation', 'code-generation', 'reasoning', 'knowledge-retrieval'],
-        cost: 0.03,
-        quality: 0.95,
-        maxTokens: 8192,
-        available: true,
-        latency: 2000,
-        priority: 3
-      },
-      'gpt-3.5-turbo': {
-        id: 'gpt-3.5-turbo',
-        provider: 'openai',
-        capabilities: ['text-generation', 'code-generation'],
-        cost: 0.002,
-        quality: 0.8,
-        maxTokens: 4096,
-        available: true,
-        latency: 1000,
-        priority: 2
-      },
       'claude-3-7-sonnet-latest': {
         id: 'claude-3-7-sonnet-latest',
         provider: 'anthropic',
@@ -293,39 +271,6 @@ export class RouterService {
         available: true,
         latency: 2000,
         priority: 3
-      },
-      'claude-3-opus': {
-        id: 'claude-3-opus',
-        provider: 'anthropic',
-        capabilities: ['text-generation', 'code-generation', 'reasoning', 'knowledge-retrieval'],
-        cost: 0.025,
-        quality: 0.93,
-        maxTokens: 100000,
-        available: true,
-        latency: 2500,
-        priority: 3
-      },
-      'claude-3-sonnet': {
-        id: 'claude-3-sonnet',
-        provider: 'anthropic',
-        capabilities: ['text-generation', 'code-generation', 'reasoning'],
-        cost: 0.015,
-        quality: 0.9,
-        maxTokens: 100000,
-        available: true,
-        latency: 1800,
-        priority: 2
-      },
-      'claude-3-haiku': {
-        id: 'claude-3-haiku',
-        provider: 'anthropic',
-        capabilities: ['text-generation'],
-        cost: 0.003,
-        quality: 0.85,
-        maxTokens: 100000,
-        available: true,
-        latency: 1200,
-        priority: 1
       },
       'lmstudio-local': {
         id: 'lmstudio-local',
@@ -847,8 +792,8 @@ export class RouterService {
         'creative': 'claude-3-7-sonnet-latest',
         'factual': 'gpt-4.1',
         'unknown': 'claude-3-7-sonnet-latest',
-        'mathematical': 'gpt-3.5-turbo',
-        'conversational': 'claude-3-haiku',
+        'mathematical': 'gpt-4.1',
+        'conversational': 'claude-3-7-sonnet-latest',
         'analytical': 'claude-3-7-sonnet-latest'
       };
       
