@@ -6,6 +6,7 @@ import { trackModelUsage, startTrace, endTrace } from '../utils/logger.js';
 import { performance } from 'perf_hooks';
 import { getModelAdapter } from '../models/adapter-registry.js';
 import { ModelRequestOptions } from '../models/base-adapter.js';
+import { errors } from '../utils/error-handler.js';
 
 /**
  * Router service response
@@ -56,6 +57,20 @@ export interface RoutingOptions {
   chainEnabled?: boolean;
   cacheStrategy?: 'default' | 'aggressive' | 'minimal' | 'none';
   cacheTTL?: number;
+  // Fallback and degradation options
+  fallbackLevels?: number; // Number of fallback attempts (default: 2)
+  degradedMode?: boolean; // Enable degraded operation mode
+  timeoutMs?: number; // Request timeout in milliseconds
+  monitorFallbacks?: boolean; // Monitor and alert on repeated fallbacks
+}
+
+/**
+ * Fallback result interface
+ */
+interface FallbackResult {
+  success: boolean;
+  response?: RouterResponse;
+  error?: Error;
 }
 
 /**
@@ -69,21 +84,171 @@ export class RouterService {
   private defaultOptions: RoutingOptions;
   private modelAvailability: Map<string, boolean>;
   private modelLatencies: Map<string, number[]>;
+  private fallbackAttempts: Map<string, number>; // Track fallback attempts
+  private fallbackAlerts: Set<string>; // Track models that have triggered alerts
+  private degradedModeEnabled: boolean; // Global degraded mode flag
 
   constructor(fastify: FastifyInstance) {
     this.fastify = fastify;
     this.classifier = createClassifierService(fastify);
     
     // Get config with fallback
-    const config = (fastify as any).config || {};
-    const cacheTTL = config.REDIS_CACHE_TTL || 300;
+    const config = (fastify as unknown as { config?: Record<string, unknown> }).config ?? {};
+    const cacheTTL = (config.REDIS_CACHE_TTL as number) ?? 300;
     
     this.cache = createCacheService(fastify, {
       namespace: 'router',
       ttl: cacheTTL,
     });
 
-    // Initialize model information
+    // Initialize empty model information
+    this.models = {};
+
+    // Initialize model availability tracking
+    this.modelAvailability = new Map();
+    
+    // Load model configurations from database
+    void this.loadModelConfigurations();
+
+    // Initialize model latency tracking
+    this.modelLatencies = new Map();
+    Object.keys(this.models).forEach(modelId => {
+      this.modelLatencies.set(modelId, []);
+    });
+
+    // Set default routing options
+    this.defaultOptions = {
+      costOptimize: (config.COST_OPTIMIZE as boolean) ?? false,
+      qualityOptimize: (config.QUALITY_OPTIMIZE as boolean) ?? true,
+      latencyOptimize: (config.LATENCY_OPTIMIZE as boolean) ?? false,
+      fallbackEnabled: (config.FALLBACK_ENABLED as boolean) ?? true,
+      chainEnabled: (config.CHAIN_ENABLED as boolean) ?? false,
+      cacheStrategy: (config.CACHE_STRATEGY as 'default' | 'aggressive' | 'minimal' | 'none') ?? 'default',
+      cacheTTL: cacheTTL,
+      fallbackLevels: parseInt((config.FALLBACK_LEVELS as string) ?? '2', 10),
+      degradedMode: (config.DEGRADED_MODE as string) === 'true',
+      timeoutMs: parseInt((config.REQUEST_TIMEOUT_MS as string) ?? '30000', 10),
+      monitorFallbacks: (config.MONITOR_FALLBACKS as string) !== 'false'
+    };
+    
+    // Initialize fallback tracking
+    this.fallbackAttempts = new Map();
+    this.fallbackAlerts = new Set();
+    this.degradedModeEnabled = this.defaultOptions.degradedMode ?? false;
+
+    // Start periodic health checks for models
+    this.startModelHealthChecks();
+  }
+
+  /**
+   * Start periodic health checks for models
+   */
+  private startModelHealthChecks(): void {
+    // Check model availability every 5 minutes
+    setInterval(() => {
+      void this.checkModelAvailability();
+    }, 5 * 60 * 1000);
+    
+    // Reload model configurations every 15 minutes
+    setInterval(() => {
+      void this.loadModelConfigurations();
+    }, 15 * 60 * 1000);
+    
+    // Reset fallback tracking every hour
+    setInterval(() => {
+      this.fallbackAttempts.clear();
+      this.fallbackAlerts.clear();
+    }, 60 * 60 * 1000);
+  }
+  
+  /**
+   * Load model configurations from database
+   */
+  private async loadModelConfigurations(): Promise<void> {
+    try {
+      // Get config manager
+      const configManager = this.fastify.configManager;
+      
+      if (configManager) {
+        // Try to get model configurations from database
+        const modelConfigs = await configManager.getAllModelConfigs();
+        
+        if (modelConfigs && modelConfigs.length > 0) {
+          // Convert to model info format
+          const newModels: Record<string, ModelInfo> = {};
+          
+          for (const config of modelConfigs) {
+            if (config.enabled) {
+              newModels[config.id] = {
+                id: config.id,
+                provider: config.provider,
+                capabilities: config.capabilities,
+                cost: config.config.cost || 0,
+                quality: config.config.quality || 0.5,
+                maxTokens: config.config.maxTokens || 4096,
+                available: true, // Will be checked by checkModelAvailability
+                latency: config.config.latency || 2000,
+                priority: config.priority
+              };
+            }
+          }
+          
+          // If we have models, replace the current models
+          if (Object.keys(newModels).length > 0) {
+            // Preserve availability status from existing models
+            for (const modelId of Object.keys(newModels)) {
+              if (this.models[modelId]) {
+                newModels[modelId].available = this.models[modelId].available;
+                
+                // Preserve latency measurements
+                const latencies = this.modelLatencies.get(modelId);
+                if (latencies && latencies.length > 0) {
+                  newModels[modelId].latency = latencies.reduce((sum, val) => sum + val, 0) / latencies.length;
+                }
+              }
+            }
+            
+            this.models = newModels;
+            
+            // Initialize latency tracking for new models
+            for (const modelId of Object.keys(this.models)) {
+              if (!this.modelLatencies.has(modelId)) {
+                this.modelLatencies.set(modelId, []);
+              }
+            }
+            
+            this.fastify.log.info({
+              modelCount: Object.keys(this.models).length
+            }, 'Loaded model configurations from database');
+            
+            // Check availability of models
+            void this.checkModelAvailability();
+            return;
+          }
+        }
+      }
+      
+      // If no models in database or config manager not available, use default models
+      if (Object.keys(this.models).length === 0) {
+        this.loadDefaultModels();
+        this.fastify.log.warn('Using default model configurations');
+      }
+    } catch (error) {
+      this.fastify.log.error(error, 'Failed to load model configurations from database');
+      
+      // If no models loaded yet, use default models
+      if (Object.keys(this.models).length === 0) {
+        this.loadDefaultModels();
+        this.fastify.log.warn('Using default model configurations due to error');
+      }
+    }
+  }
+  
+  /**
+   * Load default model configurations
+   */
+  private loadDefaultModels(): void {
+    // Default model information
     this.models = {
       'gpt-4': {
         id: 'gpt-4',
@@ -152,42 +317,15 @@ export class RouterService {
         priority: 0
       }
     };
-
+    
     // Initialize model availability tracking
     this.modelAvailability = new Map();
     
-    // Check initial availability of models
-    void this.checkModelAvailability();
-
     // Initialize model latency tracking
     this.modelLatencies = new Map();
     Object.keys(this.models).forEach(modelId => {
       this.modelLatencies.set(modelId, []);
     });
-
-    // Set default routing options
-    this.defaultOptions = {
-      costOptimize: config.COST_OPTIMIZE || false,
-      qualityOptimize: config.QUALITY_OPTIMIZE || true,
-      latencyOptimize: config.LATENCY_OPTIMIZE || false,
-      fallbackEnabled: config.FALLBACK_ENABLED || true,
-      chainEnabled: config.CHAIN_ENABLED || false,
-      cacheStrategy: config.CACHE_STRATEGY || 'default',
-      cacheTTL: cacheTTL
-    };
-
-    // Start periodic health checks for models
-    this.startModelHealthChecks();
-  }
-
-  /**
-   * Start periodic health checks for models
-   */
-  private startModelHealthChecks(): void {
-    // Check model availability every 5 minutes
-    setInterval(() => {
-      void this.checkModelAvailability();
-    }, 5 * 60 * 1000);
   }
 
   /**
@@ -229,7 +367,7 @@ export class RouterService {
    * @param latency Latency in milliseconds
    */
   private updateModelLatency(modelId: string, latency: number): void {
-    const latencies = this.modelLatencies.get(modelId) || [];
+    const latencies = this.modelLatencies.get(modelId) ?? [];
     
     // Keep only the last 10 latency measurements
     if (latencies.length >= 10) {
@@ -322,7 +460,7 @@ export class RouterService {
         
         // Cache the response if enabled
         if (routingOptions.cacheStrategy !== 'none') {
-          const ttl = this.determineCacheTTL(classification, routingOptions.cacheTTL || 300);
+          const ttl = this.determineCacheTTL(classification, routingOptions.cacheTTL ?? 300);
           await this.cache.set(cacheKey, response, ttl);
         }
         
@@ -346,34 +484,52 @@ export class RouterService {
 
       // Check if selected model is available
       if (!this.isModelAvailable(selectedModel) && routingOptions.fallbackEnabled) {
-        // Find fallback model
-        const fallbackModel = this.selectFallbackModel(selectedModel, classification);
+        // Find fallback model with multi-level strategy
+        const fallbackResult = await this.executeFallbackStrategy(
+          selectedModel,
+          prompt,
+          classification,
+          maxTokens,
+          temperature,
+          routingOptions
+        );
         
-        this.fastify.log.warn({
-          originalModel: selectedModel,
-          fallbackModel,
-          reason: 'Model unavailable'
-        }, 'Using fallback model');
-        
-        // Send to fallback model
-        const response = await this.sendToModel(fallbackModel, prompt, maxTokens, temperature);
-        
-        // Add classification and processing info
-        response.classification = {
-          intent: classification.type,
-          confidence: classification.confidence,
-          features: classification.features,
-          domain: classification.domain
-        };
-        response.processing_time = Date.now() - startTime;
-        
-        // Cache the response if enabled
-        if (routingOptions.cacheStrategy !== 'none') {
-          const ttl = this.determineCacheTTL(classification, routingOptions.cacheTTL || 300);
-          await this.cache.set(cacheKey, response, ttl);
+        // If fallback was successful, return the response
+        if (fallbackResult.success && fallbackResult.response) {
+          const fallbackResponse = fallbackResult.response;
+          
+          // Add classification and processing info
+          fallbackResponse.classification = {
+            intent: classification.type,
+            confidence: classification.confidence,
+            features: classification.features,
+            domain: classification.domain
+          };
+          fallbackResponse.processing_time = Date.now() - startTime;
+          
+          // Cache the response if enabled
+          if (routingOptions.cacheStrategy !== 'none') {
+            const ttl = this.determineCacheTTL(classification, routingOptions.cacheTTL ?? 300);
+            await this.cache.set(cacheKey, fallbackResponse, ttl);
+          }
+          
+          return fallbackResponse;
         }
         
-        return response;
+        // If all fallbacks failed and we're in degraded mode, return a degraded response
+        if (this.degradedModeEnabled || routingOptions.degradedMode) {
+          return this.createDegradedResponse(prompt, classification, fallbackResult.error);
+        }
+        
+        // If all fallbacks failed and we're not in degraded mode, throw an error
+        throw errors.router.allModelsFailed(
+          'All models failed to process the request',
+          {
+            originalModel: selectedModel,
+            classification: classification.type,
+            error: fallbackResult.error?.message
+          }
+        );
       }
 
       // Send to selected model
@@ -396,7 +552,7 @@ export class RouterService {
       
       // Cache the response if enabled
       if (routingOptions.cacheStrategy !== 'none') {
-        const ttl = this.determineCacheTTL(classification, routingOptions.cacheTTL || 300);
+        const ttl = this.determineCacheTTL(classification, routingOptions.cacheTTL ?? 300);
         await this.cache.set(cacheKey, response, ttl);
       }
 
@@ -423,7 +579,7 @@ export class RouterService {
    * @param prompt The user prompt
    * @returns The classified intent
    */
-  private async classifyPrompt(prompt: string): Promise<ClassifiedIntent> {
+  private classifyPrompt(prompt: string): ClassifiedIntent {
     // In a real implementation, this would use a classifier service
     // For this proof of concept, we'll just return a simple classification
     return {
@@ -450,7 +606,7 @@ export class RouterService {
    * @returns True if the model is available
    */
   private isModelAvailable(modelId: string): boolean {
-    return this.modelAvailability.get(modelId) || false;
+    return this.modelAvailability.get(modelId) ?? false;
   }
 
   /**
@@ -605,7 +761,7 @@ export class RouterService {
    * @param classification The prompt classification
    * @returns Fallback model ID
    */
-  private selectFallbackModel(primaryModel: string, classification: ClassifiedIntent): string {
+  private selectFallbackModel(primaryModel: string, _classification: ClassifiedIntent): string {
     // Get primary model info
     const primaryModelInfo = this.models[primaryModel];
     
@@ -783,7 +939,7 @@ export class RouterService {
       .substring(0, 16);
     
     // Add model ID, max tokens, and temperature to the key
-    const modelPart = modelId || 'default';
+    const modelPart = modelId ?? 'default';
     
     // Simple cache key generation
     return `${modelPart}:${maxTokens}:${temperature}:${hash}`;
@@ -797,7 +953,7 @@ export class RouterService {
   private async checkCache(cacheKey: string) {
     try {
       const cached = await this.fastify.redis.get(cacheKey);
-      return cached ? JSON.parse(cached) : null;
+      return cached ? JSON.parse(cached) as RouterResponse : null;
     } catch (error) {
       this.fastify.log.error(error, 'Cache check failed');
       return null;
@@ -809,7 +965,7 @@ export class RouterService {
    * @param cacheKey The cache key
    * @param response The response to cache
    */
-  private async cacheResponse(cacheKey: string, response: any) {
+  private async cacheResponse(cacheKey: string, response: RouterResponse) {
     try {
       // Cache for 1 hour
       await this.fastify.redis.set(
@@ -831,11 +987,21 @@ export class RouterService {
    * @param temperature Sampling temperature
    * @returns The model response
    */
+  /**
+   * Send a prompt to a model with timeout handling
+   * @param modelId Model ID
+   * @param prompt User prompt
+   * @param maxTokens Maximum tokens
+   * @param temperature Temperature
+   * @param timeoutMs Optional timeout in milliseconds
+   * @returns Router response
+   */
   private async sendToModel(
     modelId: string,
     prompt: string,
     maxTokens: number,
-    temperature: number
+    temperature: number,
+    _timeoutMs?: number // Used in executeFallbackStrategy
   ): Promise<RouterResponse> {
     // Start a trace for this model call
     const traceId = startTrace('model_call', undefined, {
@@ -923,6 +1089,198 @@ export class RouterService {
       // Rethrow with additional context
       throw new Error(`Failed to call model ${modelId}: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }
+
+  /**
+   * Execute multi-level fallback strategy
+   * @param primaryModel Primary model ID
+   * @param prompt User prompt
+   * @param classification Prompt classification
+   * @param maxTokens Maximum tokens
+   * @param temperature Temperature
+   * @param options Routing options
+   * @returns Fallback result
+   */
+  private async executeFallbackStrategy(
+    primaryModel: string,
+    prompt: string,
+    classification: ClassifiedIntent,
+    maxTokens: number,
+    temperature: number,
+    options: RoutingOptions
+  ): Promise<FallbackResult> {
+    // Determine fallback levels
+    const fallbackLevels = options.fallbackLevels ?? this.defaultOptions.fallbackLevels ?? 2;
+    
+    // Get fallback models in priority order
+    const fallbackModels = this.getFallbackModelsInOrder(primaryModel, classification);
+    
+    // Track fallback attempts for monitoring
+    if (options.monitorFallbacks ?? this.defaultOptions.monitorFallbacks) {
+      const currentAttempts = this.fallbackAttempts.get(primaryModel) ?? 0;
+      this.fallbackAttempts.set(primaryModel, currentAttempts + 1);
+      
+      // Alert if fallbacks are happening too frequently
+      if (currentAttempts >= 5 && !this.fallbackAlerts.has(primaryModel)) {
+        this.fastify.log.warn({
+          modelId: primaryModel,
+          fallbackCount: currentAttempts
+        }, 'Frequent fallbacks detected for model');
+        
+        this.fallbackAlerts.add(primaryModel);
+      }
+    }
+    
+    // Try each fallback model in order, up to the fallback level limit
+    let lastError: Error | undefined;
+    
+    for (let i = 0; i < Math.min(fallbackModels.length, fallbackLevels); i++) {
+      const fallbackModel = fallbackModels[i];
+      
+      try {
+        this.fastify.log.warn({
+          originalModel: primaryModel,
+          fallbackModel,
+          fallbackLevel: i + 1,
+          maxLevels: fallbackLevels,
+          reason: lastError ? `Previous error: ${lastError.message}` : 'Model unavailable'
+        }, 'Using fallback model');
+        
+        // Send to fallback model with timeout from options
+        const response = await this.sendToModel(
+          fallbackModel,
+          prompt,
+          maxTokens,
+          temperature,
+          options.timeoutMs
+        );
+        
+        // Return successful result
+        return {
+          success: true,
+          response
+        };
+      } catch (error) {
+        // Store error for next iteration
+        lastError = error instanceof Error ? error : new Error(String(error));
+        
+        this.fastify.log.error({
+          fallbackModel,
+          fallbackLevel: i + 1,
+          error: lastError.message
+        }, 'Fallback model failed');
+      }
+    }
+    
+    // All fallbacks failed
+    return {
+      success: false,
+      error: lastError ?? new Error('All fallback models failed')
+    };
+  }
+  
+  /**
+   * Get fallback models in priority order
+   * @param primaryModel Primary model ID
+   * @param classification Prompt classification
+   * @returns Array of fallback model IDs in priority order
+   */
+  private getFallbackModelsInOrder(primaryModel: string, classification: ClassifiedIntent): string[] {
+    // Get all available models except the primary
+    const availableModels = Object.values(this.models).filter(model =>
+      model.id !== primaryModel && this.isModelAvailable(model.id)
+    );
+    
+    if (availableModels.length === 0) {
+      return [];
+    }
+    
+    // First priority: same provider models
+    const primaryModelInfo = this.models[primaryModel];
+    const sameProviderModels = availableModels.filter(model =>
+      model.provider === primaryModelInfo?.provider
+    );
+    
+    // Second priority: models with similar capabilities
+    const similarCapabilityModels = availableModels.filter(model =>
+      primaryModelInfo?.capabilities.every(capability =>
+        model.capabilities.includes(capability)
+      )
+    );
+    
+    // Third priority: models that match the classification requirements
+    const classificationModels = availableModels.filter(model =>
+      classification.features.every(feature =>
+        model.capabilities.includes(feature)
+      )
+    );
+    
+    // Fourth priority: any available model sorted by quality
+    const sortedByQuality = [...availableModels].sort((a, b) => b.quality - a.quality);
+    
+    // Combine all priorities, removing duplicates
+    const allModels: string[] = [];
+    
+    // Add models in priority order, avoiding duplicates
+    const addModelsNoDuplicates = (models: ModelInfo[]) => {
+      for (const model of models) {
+        if (!allModels.includes(model.id)) {
+          allModels.push(model.id);
+        }
+      }
+    };
+    
+    addModelsNoDuplicates(sameProviderModels);
+    addModelsNoDuplicates(similarCapabilityModels);
+    addModelsNoDuplicates(classificationModels);
+    addModelsNoDuplicates(sortedByQuality);
+    
+    return allModels;
+  }
+  
+  /**
+   * Create a degraded response when all models fail
+   * @param prompt Original prompt
+   * @param classification Prompt classification
+   * @param error Error that occurred
+   * @returns Degraded response
+   */
+  private createDegradedResponse(
+    prompt: string,
+    classification: ClassifiedIntent,
+    error?: Error
+  ): RouterResponse {
+    // Try to get a cached response for similar prompts
+    const degradedResponse: RouterResponse = {
+      response: 'The service is currently experiencing issues. Please try again later.',
+      model_used: 'degraded_mode',
+      tokens: {
+        prompt: classification.tokens.estimated,
+        completion: 20,
+        total: classification.tokens.estimated + 20
+      },
+      classification: {
+        intent: classification.type,
+        confidence: classification.confidence,
+        features: classification.features,
+        domain: classification.domain
+      },
+      processing_time: 0.1,
+      cached: false
+    };
+    
+    // Add error details if available
+    if (error) {
+      degradedResponse.response += ` (Error: ${error.message})`;
+    }
+    
+    this.fastify.log.error({
+      mode: 'degraded',
+      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+      error: error?.message
+    }, 'Serving degraded response');
+    
+    return degradedResponse;
   }
 }
 
