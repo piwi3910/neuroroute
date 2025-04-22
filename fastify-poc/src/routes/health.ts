@@ -40,14 +40,44 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
       },
     },
     handler: async (request, reply) => {
-      const { config } = fastify;
+      // Get config with fallback
+      const config = (fastify as any).config || {};
       const startTime = process.hrtime();
+      
+      // Helper functions for health checks
+      const isDatabaseHealthy = async () => {
+        try {
+          if (fastify.prisma) {
+            // Simple query to check database connection
+            await fastify.prisma.$queryRaw`SELECT 1`;
+            return true;
+          }
+          return false;
+        } catch (error) {
+          request.log.error(error, 'Database health check failed');
+          return false;
+        }
+      };
+      
+      const isRedisHealthy = async () => {
+        try {
+          if (fastify.redis) {
+            // Ping Redis to check connection
+            const pong = await fastify.redis.ping();
+            return pong === 'PONG';
+          }
+          return false;
+        } catch (error) {
+          request.log.error(error, 'Redis health check failed');
+          return false;
+        }
+      };
       
       // Check database connection
       let databaseStatus = 'unknown';
       try {
-        const isDatabaseHealthy = await fastify.isDatabaseHealthy();
-        databaseStatus = isDatabaseHealthy ? 'ok' : 'error';
+        const dbHealthy = await isDatabaseHealthy();
+        databaseStatus = dbHealthy ? 'ok' : 'error';
       } catch (error) {
         request.log.error(error, 'Database health check failed');
         databaseStatus = 'error';
@@ -55,10 +85,10 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
 
       // Check Redis connection if enabled
       let redisStatus = 'disabled';
-      if (config.ENABLE_CACHE) {
+      if (config.ENABLE_CACHE !== false) {
         try {
-          const isRedisHealthy = await fastify.isRedisHealthy();
-          redisStatus = isRedisHealthy ? 'ok' : 'error';
+          const redisHealthy = await isRedisHealthy();
+          redisStatus = redisHealthy ? 'ok' : 'error';
         } catch (error) {
           request.log.error(error, 'Redis health check failed');
           redisStatus = 'error';
@@ -69,7 +99,7 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
       let overallStatus = 'ok';
       if (databaseStatus === 'error') {
         overallStatus = 'error';
-      } else if (config.ENABLE_CACHE && redisStatus === 'error') {
+      } else if (config.ENABLE_CACHE !== false && redisStatus === 'error') {
         overallStatus = 'degraded';
       }
       
