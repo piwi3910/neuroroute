@@ -8,6 +8,11 @@
     "start": "node dist/app.js",
     "test": "jest",
     "test:watch": "jest --watch",
+    "test:unit": "jest test/unit",
+    "test:integration": "jest test/integration",
+    "test:performance": "ts-node test/performance/benchmark.ts",
+    "test:coverage": "jest --coverage",
+    "test:all": "./scripts/run-tests.sh",
     "lint": "eslint . --ext .ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
