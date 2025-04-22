@@ -13,8 +13,8 @@ export interface LoggerOptions {
  * @param options Logger options
  * @returns Pino logger instance
  */
-export function createLogger(options: LoggerOptions = {}) {
-  const logLevel = options.level || process.env.LOG_LEVEL || 'info';
+export function createLogger(options: LoggerOptions = {}, config?: any) {
+  const logLevel = options.level || (config?.LOG_LEVEL) || 'info';
   
   // Sensitive fields to redact from logs
   const redactFields = options.redact || [
@@ -37,7 +37,7 @@ export function createLogger(options: LoggerOptions = {}) {
   };
 
   // Add pretty printing in development
-  if (options.prettyPrint || process.env.NODE_ENV !== 'production') {
+  if (options.prettyPrint || (config?.NODE_ENV !== 'production')) {
     loggerConfig.transport = {
       target: 'pino-pretty',
       options: {
@@ -77,7 +77,7 @@ export function setupRequestLogging(fastify: FastifyInstance) {
       url: request.url,
       method: request.method,
       statusCode: reply.statusCode,
-      responseTime: reply.getResponseTime(),
+      responseTime: reply.elapsedTime, // Use elapsedTime instead of getResponseTime
     }, 'request completed');
     
     done();

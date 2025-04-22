@@ -4,7 +4,9 @@ import fastifyRedis from '@fastify/redis';
 // Redis configuration plugin
 const redisPlugin: FastifyPluginAsync = async (fastify) => {
   // Get Redis URL from environment variables or use default
-  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+  // Use type assertion to access config property
+  const config = (fastify as any).config;
+  const redisUrl = config?.REDIS_URL || 'redis://localhost:6379';
 
   await fastify.register(fastifyRedis, {
     url: redisUrl,

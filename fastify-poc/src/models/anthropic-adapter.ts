@@ -28,7 +28,8 @@ export class AnthropicAdapter extends BaseModelAdapter {
     super(fastify, modelId);
     
     // Get API key from environment
-    this.apiKey = process.env.ANTHROPIC_API_KEY || '';
+    const config = (fastify as any).config;
+    this.apiKey = config?.ANTHROPIC_API_KEY || '';
     this.baseUrl = 'https://api.anthropic.com/v1';
     
     // Set capabilities based on model

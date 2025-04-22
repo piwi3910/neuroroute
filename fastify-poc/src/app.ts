@@ -46,27 +46,35 @@ async function start() {
     await registerPlugins();
     await registerRoutes();
 
-    const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-    const host = process.env.HOST || '0.0.0.0';
+    // Access config from server instance after plugins are registered
+    const config = (server as any).config || {};
+    const port = config.PORT ? parseInt(String(config.PORT), 10) : 3000;
+    const host = config.HOST || '0.0.0.0';
 
     await server.listen({ port, host });
     
-    console.log(`Server is running on ${host}:${port}`);
+    server.log.info(`Server is running on ${host}:${port}`);
   } catch (err) {
     server.log.error(err);
-    process.exit(1);
+    // Use Node.js process
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (global as any).process?.exit?.(1);
   }
 }
 
 // Handle graceful shutdown
-process.on('SIGINT', async () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(global as any).process?.on?.('SIGINT', async () => {
   await server.close();
-  process.exit(0);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (global as any).process?.exit?.(0);
 });
 
-process.on('SIGTERM', async () => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(global as any).process?.on?.('SIGTERM', async () => {
   await server.close();
-  process.exit(0);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (global as any).process?.exit?.(0);
 });
 
 // Start the server
