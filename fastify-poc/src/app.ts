@@ -65,13 +65,14 @@ export async function registerPlugins(server: FastifyInstance): Promise<void> {
   await server.register(corsPlugin);
   await server.register(authPlugin);
   
-  // Only register Redis if enabled
-  if (server.config.ENABLE_CACHE) {
+  // Only register Redis if enabled (with fallback)
+  const config = (server as any).config || {};
+  if (config.ENABLE_CACHE !== false) {
     await server.register(redisPlugin);
   }
   
-  // Only register Swagger if enabled
-  if (server.config.ENABLE_SWAGGER) {
+  // Only register Swagger if enabled (with fallback)
+  if (config.ENABLE_SWAGGER !== false) {
     await server.register(swaggerPlugin);
   }
   
@@ -124,8 +125,11 @@ async function start() {
     await registerPlugins(server);
     await registerRoutes(server);
 
-    // Get configuration
-    const { PORT, HOST, NODE_ENV } = server.config;
+    // Get configuration with fallbacks
+    const config = (server as any).config || {};
+    const PORT = config.PORT || 3000;
+    const HOST = config.HOST || '0.0.0.0';
+    const NODE_ENV = config.NODE_ENV || 'development';
 
     // Start listening
     await server.listen({ port: PORT, host: HOST });
