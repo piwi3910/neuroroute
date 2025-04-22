@@ -71,7 +71,7 @@ NeuroRoute follows a plugin-based architecture using Fastify, with the following
 1. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/neuroroute.git
-   cd neuroroute/fastify-poc
+   cd neuroroute/neuroroute-api
    ```
 
 2. Install dependencies:
@@ -103,7 +103,7 @@ NeuroRoute follows a plugin-based architecture using Fastify, with the following
 ## Project Structure
 
 ```
-fastify-poc/
+neuroroute-api/
 ├── src/                  # Source code
 │   ├── app.ts            # Main application setup
 │   ├── config.ts         # Configuration management

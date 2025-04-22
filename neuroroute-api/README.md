@@ -33,7 +33,7 @@ NeuroRoute is an intelligent routing system for LLM requests, directing prompts 
 1. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/neuroroute.git
-   cd neuroroute/fastify-poc
+   cd neuroroute/neuroroute-api
    ```
 
 2. Install dependencies:
