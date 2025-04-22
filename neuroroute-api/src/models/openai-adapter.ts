@@ -1,3 +1,4 @@
+
 import { FastifyInstance } from 'fastify';
 import axios from 'axios';
 import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk, RawProviderResponse, ModelDetails } from './base-adapter.js';
@@ -236,7 +237,7 @@ export class OpenAIAdapter extends BaseModelAdapter {
             completion: response.data.usage.completion_tokens,
             total: response.data.usage.total_tokens,
           },
-          model: this.modelId,
+          model: modelName, // Use the actual model name sent to the API
           processingTime: (Date.now() - startTime) / 1000,
           raw: response.data,
         };
@@ -554,7 +555,7 @@ export class OpenAIAdapter extends BaseModelAdapter {
               const finalChunk: StreamingChunk = {
                 chunk: '',
                 done: true,
-                model: this.modelId,
+                model: modelName, // Use the actual model name sent to the API
                 finishReason
               };
               this.logStreamingChunk(finalChunk);
@@ -578,7 +579,7 @@ export class OpenAIAdapter extends BaseModelAdapter {
                 const streamingChunk: StreamingChunk = {
                   chunk: content,
                   done: !!finishReason,
-                  model: this.modelId,
+                  model: modelName, // Use the actual model name sent to the API
                   finishReason
                 };
 
@@ -596,7 +597,7 @@ export class OpenAIAdapter extends BaseModelAdapter {
         const finalChunk: StreamingChunk = {
           chunk: '',
           done: true,
-          model: this.modelId,
+          model: modelName, // Use the actual model name sent to the API
           finishReason: finishReason ?? 'stop'
         };
         this.logStreamingChunk(finalChunk);
@@ -625,7 +626,7 @@ export class OpenAIAdapter extends BaseModelAdapter {
           const errorChunk: StreamingChunk = {
             chunk: `Error: ${modelError.message}`,
             done: true,
-            model: this.modelId,
+            model: this.modelId, // Revert to original model ID for error chunks
             error: true,
             errorDetails: modelError.code
           };

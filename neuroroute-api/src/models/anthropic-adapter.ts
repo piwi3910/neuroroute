@@ -174,7 +174,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
           completion: response.data.usage.output_tokens,
           total: response.data.usage.input_tokens + response.data.usage.output_tokens,
         },
-        model: this.modelId,
+        model: modelName, // Use the actual model name sent to the API
         processingTime: (Date.now() - startTime) / 1000,
         raw: response.data,
       };
@@ -193,7 +193,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
           completion: 20,
           total: this.countTokens(prompt) + 20,
         },
-        model: this.modelId,
+        model: this.modelId, // Use original model ID for error responses
         processingTime: (Date.now() - startTime) / 1000,
       };
       
@@ -279,7 +279,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
             const finalChunk: StreamingChunk = {
               chunk: '',
               done: true,
-              model: this.modelId,
+              model: modelName, // Use the actual model name sent to the API
               finishReason: stopReason
             };
             this.logStreamingChunk(finalChunk);
@@ -296,7 +296,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
               const streamingChunk: StreamingChunk = {
                 chunk: content,
                 done: false,
-                model: this.modelId
+                model: modelName // Use the actual model name sent to the API
               };
 
               this.logStreamingChunk(streamingChunk);
@@ -307,7 +307,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
               const finalChunk: StreamingChunk = {
                 chunk: '',
                 done: true,
-                model: this.modelId,
+                model: modelName, // Use the actual model name sent to the API
                 finishReason: stopReason
               };
               
@@ -325,7 +325,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
       const finalChunk: StreamingChunk = {
         chunk: '',
         done: true,
-        model: this.modelId,
+        model: modelName, // Use the actual model name sent to the API
         finishReason: stopReason ?? 'stop'
       };
       this.logStreamingChunk(finalChunk);
@@ -338,7 +338,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
       const errorChunk: StreamingChunk = {
         chunk: `Error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         done: true,
-        model: this.modelId,
+        model: this.modelId, // Use original model ID for error chunks
         error: true,
         errorDetails: error instanceof Error ? error.message : 'Unknown error'
       };
