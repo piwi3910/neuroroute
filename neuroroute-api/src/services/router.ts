@@ -1,9 +1,11 @@
 import { FastifyInstance } from 'fastify';
-import createClassifierService, { ClassifiedIntent } from './classifier';
-import createCacheService from './cache';
+import createClassifierService, { ClassifiedIntent } from './classifier.js';
+import createCacheService from './cache.js';
 import crypto from 'crypto';
-import { trackModelUsage, startTrace, endTrace } from '../utils/logger';
+import { trackModelUsage, startTrace, endTrace } from '../utils/logger.js';
 import { performance } from 'perf_hooks';
+import { getModelAdapter } from '../models/adapter-registry.js';
+import { ModelRequestOptions } from '../models/base-adapter.js';
 
 /**
  * Router service response
@@ -153,9 +155,9 @@ export class RouterService {
 
     // Initialize model availability tracking
     this.modelAvailability = new Map();
-    Object.keys(this.models).forEach(modelId => {
-      this.modelAvailability.set(modelId, true);
-    });
+    
+    // Check initial availability of models
+    void this.checkModelAvailability();
 
     // Initialize model latency tracking
     this.modelLatencies = new Map();
@@ -184,7 +186,7 @@ export class RouterService {
   private startModelHealthChecks(): void {
     // Check model availability every 5 minutes
     setInterval(() => {
-      this.checkModelAvailability();
+      void this.checkModelAvailability();
     }, 5 * 60 * 1000);
   }
 
@@ -194,9 +196,11 @@ export class RouterService {
   private async checkModelAvailability(): Promise<void> {
     for (const modelId of Object.keys(this.models)) {
       try {
-        // Simple health check - in a real implementation, this would
-        // make a lightweight call to each model provider
-        const isAvailable = Math.random() > 0.1; // 10% chance of being unavailable for simulation
+        // Get the appropriate adapter for this model
+        const adapter = getModelAdapter(this.fastify, modelId);
+        
+        // Check if the model is available using the adapter
+        const isAvailable = await adapter.isAvailable();
         
         // Update availability
         this.modelAvailability.set(modelId, isAvailable);
@@ -254,8 +258,8 @@ export class RouterService {
   async routePrompt(
     prompt: string,
     modelId?: string,
-    maxTokens: number = 1024,
-    temperature: number = 0.7,
+    maxTokens = 1024,
+    temperature = 0.7,
     options?: RoutingOptions
   ): Promise<RouterResponse> {
     const startTime = Date.now();
@@ -768,8 +772,8 @@ export class RouterService {
   private generateCacheKey(
     prompt: string,
     modelId?: string,
-    maxTokens: number = 1024,
-    temperature: number = 0.7
+    maxTokens = 1024,
+    temperature = 0.7
   ): string {
     // Create a hash of the prompt
     const hash = crypto
@@ -844,26 +848,32 @@ export class RouterService {
     const startTime = performance.now();
     
     try {
-      // In a real implementation, this would use model adapters
-      // For this proof of concept, we'll just return a simulated response
-      const simulatedResponse = `This is a simulated response from ${modelId} to: "${prompt}"`;
+      // Get the appropriate adapter for this model
+      const adapter = getModelAdapter(this.fastify, modelId);
       
-      // Simulate token counting
-      const promptTokens = Math.ceil(prompt.length / 4);
-      const completionTokens = Math.ceil(simulatedResponse.length / 4);
-      const totalTokens = promptTokens + completionTokens;
+      // Prepare request options
+      const options: ModelRequestOptions = {
+        maxTokens,
+        temperature
+      };
+      
+      // Generate completion using the adapter
+      const modelResponse = await adapter.generateCompletion(prompt, options);
       
       // Calculate response time
       const responseTime = performance.now() - startTime;
       
       // Track model usage metrics
-      trackModelUsage(modelId, totalTokens, responseTime);
+      trackModelUsage(modelId, modelResponse.tokens.total, responseTime);
+      
+      // Update model latency tracking
+      this.updateModelLatency(modelId, responseTime);
       
       // End the trace
       endTrace(traceId, {
-        promptTokens,
-        completionTokens,
-        totalTokens,
+        promptTokens: modelResponse.tokens.prompt,
+        completionTokens: modelResponse.tokens.completion,
+        totalTokens: modelResponse.tokens.total,
         responseTime,
         success: true
       });
@@ -871,9 +881,9 @@ export class RouterService {
       // Log the model call with correlation ID
       this.fastify.log.info({
         modelId,
-        promptTokens,
-        completionTokens,
-        totalTokens,
+        promptTokens: modelResponse.tokens.prompt,
+        completionTokens: modelResponse.tokens.completion,
+        totalTokens: modelResponse.tokens.total,
         responseTime: Math.round(responseTime),
         maxTokens,
         temperature,
@@ -881,17 +891,18 @@ export class RouterService {
       
       // Create and return the response
       const response: RouterResponse = {
-        response: simulatedResponse,
+        response: modelResponse.text,
         model_used: modelId,
         tokens: {
-          prompt: promptTokens,
-          completion: completionTokens,
-          total: promptTokens + completionTokens,
+          prompt: modelResponse.tokens.prompt,
+          completion: modelResponse.tokens.completion,
+          total: modelResponse.tokens.total,
         },
         classification: {
           intent: 'unknown',
           confidence: 0.5,
         },
+        processing_time: responseTime / 1000, // Convert to seconds
       };
       
       return response;
