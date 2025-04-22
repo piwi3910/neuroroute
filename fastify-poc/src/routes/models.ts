@@ -94,8 +94,22 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
     handler: async (request, reply) => {
       const { id } = request.params as { id: string };
 
+      // Define model interface for type safety
+      interface ModelInfo {
+        id: string;
+        name: string;
+        provider: string;
+        capabilities: string[];
+        status: string;
+        details: {
+          contextWindow: number;
+          tokenLimit: number;
+          version: string;
+        };
+      }
+
       // In a real implementation, this would come from a service or database
-      const models = {
+      const models: { [key: string]: ModelInfo } = {
         'gpt-4': {
           id: 'gpt-4',
           name: 'GPT-4',
