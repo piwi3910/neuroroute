@@ -6,7 +6,7 @@
  * the Zod library and not our actual code.
  */
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any
+ 
 import { z } from 'zod';
 
 /**
@@ -65,7 +65,7 @@ export const modelConfigCreateSchema = z.object({
   enabled: z.boolean().default(true),
   priority: z.number().int().min(0).default(0),
   capabilities: z.array(z.string()).min(1, 'At least one capability is required'),
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+   
   config: z.record(z.unknown()).refine(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (config: any) => {

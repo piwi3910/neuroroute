@@ -231,7 +231,9 @@ process.on('SIGTERM', async () => {
 const server = createServer();
 
 // Start the server if this file is run directly
-if (require.main === module) {
+// Using import.meta.url to check if this is the main module
+const isMainModule = import.meta.url.endsWith(process.argv[1].replace(/^file:\/\//, ''));
+if (isMainModule) {
   start();
 }
 

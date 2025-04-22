@@ -151,7 +151,7 @@ const dbOptimizerPlugin: FastifyPluginAsync<DbOptimizerOptions> = async (fastify
   const mergedOptions = { ...defaultOptions, ...options };
   
   // Get Prisma client from fastify instance
-  const prisma = fastify.prisma as PrismaClient;
+  const prisma = fastify.prisma;
   
   if (!prisma) {
     throw new Error('Prisma client not found. Make sure to register the prisma plugin first.');

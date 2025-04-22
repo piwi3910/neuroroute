@@ -1,5 +1,18 @@
 import { FastifyPluginAsync } from 'fastify';
-import { version } from '../../package.json';
+// Import package.json version dynamically
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// Get the directory name of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Read package.json
+const packageJson = JSON.parse(
+  readFileSync(join(__dirname, '../../package.json'), 'utf8')
+);
+const version = packageJson.version;
 
 /**
  * Health check endpoint

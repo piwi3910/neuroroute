@@ -55,9 +55,7 @@ interface CacheOptions {
   // Cache invalidation options
   invalidation?: {
     // Automatic invalidation by model/entity
-    models?: {
-      [key: string]: string[]; // Model name -> cache patterns to invalidate
-    };
+    models?: Record<string, string[]>;
   };
 }
 
@@ -227,7 +225,7 @@ const generateCacheKey = (
   
   // Add content type
   if (options.strategies?.byContentType) {
-    const contentType = request.headers['accept'] ?? '*/*';
+    const contentType = request.headers.accept ?? '*/*';
     parts.push(contentType.toString());
   }
   

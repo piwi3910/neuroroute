@@ -367,7 +367,7 @@ describe('UserService', () => {
       // Create a password hash and salt
       const password = 'password123';
       const salt = 'test-salt';
-      const hash = userService['hashPassword'](password).hash;
+      const hash = userService.hashPassword(password).hash;
       
       // Mock user data
       const mockUser = {
@@ -415,7 +415,7 @@ describe('UserService', () => {
       // Create a password hash and salt
       const correctPassword = 'password123';
       const salt = 'test-salt';
-      const hash = userService['hashPassword'](correctPassword).hash;
+      const hash = userService.hashPassword(correctPassword).hash;
       
       // Mock user data
       const mockUser = {
@@ -493,7 +493,7 @@ describe('UserService', () => {
   describe('password handling', () => {
     it('should hash passwords securely', () => {
       // Get the private hashPassword method
-      const hashPassword = userService['hashPassword'].bind(userService);
+      const hashPassword = userService.hashPassword.bind(userService);
       
       // Hash a password
       const { hash, salt } = hashPassword('password123');
@@ -507,8 +507,8 @@ describe('UserService', () => {
     
     it('should verify passwords correctly', () => {
       // Get the private methods
-      const hashPassword = userService['hashPassword'].bind(userService);
-      const verifyPassword = userService['verifyPassword'].bind(userService);
+      const hashPassword = userService.hashPassword.bind(userService);
+      const verifyPassword = userService.verifyPassword.bind(userService);
       
       // Hash a password
       const password = 'password123';

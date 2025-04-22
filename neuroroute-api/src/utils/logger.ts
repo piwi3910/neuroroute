@@ -97,7 +97,7 @@ export function createLogger(options: LoggerOptions = {}, config?: any) {
           url: req.url,
           correlationId: req.headers['x-correlation-id'] ?? req.id,
           userAgent: req.headers['user-agent'],
-          ip: req.ip ?? req.ips || req.headers['x-forwarded-for']
+          ip: (req.ip ?? req.ips) ?? req.headers['x-forwarded-for']
         };
       },
       err: pino.stdSerializers.err
@@ -173,7 +173,7 @@ export function setupRequestLogging(fastify: FastifyInstance) {
     const correlationId = request.headers['x-correlation-id'] ?? randomUUID();
     
     // Generate or use existing request ID
-    const requestId = request.headers['x-request-id'] ?? request.id || 
+    const requestId = (request.headers['x-request-id'] ?? request.id) ||
                       `req-${Math.random().toString(36).substring(2, 15)}`;
     
     // Add IDs to response headers
@@ -204,7 +204,7 @@ export function setupRequestLogging(fastify: FastifyInstance) {
     
     // Initialize metrics for this endpoint if enabled
     if (enableMetrics) {
-      const endpoint = `${request.method}:${request.routeOptions?.url || request.url}`;
+      const endpoint = `${request.method}:${request.routeOptions?.url ?? request.url}`;
       
       if (!metrics.endpoints[endpoint]) {
         metrics.endpoints[endpoint] = {
@@ -223,7 +223,7 @@ export function setupRequestLogging(fastify: FastifyInstance) {
   fastify.addHook('onResponse', (request, reply, done) => {
     const responseTime = reply.elapsedTime;
     const statusCode = reply.statusCode;
-    const endpoint = `${request.method}:${request.routeOptions?.url || request.url}`;
+    const endpoint = `${request.method}:${request.routeOptions?.url ?? request.url}`;
     
     // Update metrics if enabled
     if (enableMetrics) {
@@ -278,7 +278,7 @@ export function setupRequestLogging(fastify: FastifyInstance) {
     if (enableMetrics) {
       metrics.errorCount++;
       
-      const endpoint = `${request.method}:${request.routeOptions?.url || request.url}`;
+      const endpoint = `${request.method}:${request.routeOptions?.url ?? request.url}`;
       if (metrics.endpoints[endpoint]) {
         metrics.endpoints[endpoint].errors++;
       }

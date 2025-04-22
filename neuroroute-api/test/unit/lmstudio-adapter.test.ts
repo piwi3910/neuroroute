@@ -201,7 +201,7 @@ describe('LMStudioAdapter', () => {
       });
       
       const chunks: StreamingChunk[] = [];
-      for await (const chunk of adapter.generateCompletionStream!('Test prompt')) {
+      for await (const chunk of adapter.generateCompletionStream('Test prompt')) {
         chunks.push(chunk);
       }
       
@@ -233,7 +233,7 @@ describe('LMStudioAdapter', () => {
       mockedAxios.post.mockRejectedValueOnce(new Error('Streaming API error'));
       
       const chunks: StreamingChunk[] = [];
-      for await (const chunk of adapter.generateCompletionStream!('Test prompt')) {
+      for await (const chunk of adapter.generateCompletionStream('Test prompt')) {
         chunks.push(chunk);
       }
       

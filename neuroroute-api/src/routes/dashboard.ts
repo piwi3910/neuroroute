@@ -12,7 +12,7 @@ export default async function dashboardRoutes(fastify: FastifyInstance) {
     const user = request.user;
     
     // Check if user exists and has admin role
-    if (!user || !user.roles.includes('admin')) {
+    if (!user?.roles.includes('admin')) {
       reply.code(403).send({ error: 'Forbidden: Admin access required' });
       return reply;
     }

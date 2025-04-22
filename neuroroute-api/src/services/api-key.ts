@@ -29,7 +29,7 @@ export class ApiKeyService {
       });
 
       // Check if key exists and is enabled
-      if (!key || !key.enabled) {
+      if (!key?.enabled) {
         return { valid: false };
       }
 
@@ -77,7 +77,7 @@ export class ApiKeyService {
 
     // Check query parameter
     const queryKey = request.query as any;
-    if (queryKey && queryKey.api_key && typeof queryKey.api_key === 'string') {
+    if (queryKey?.api_key && typeof queryKey.api_key === 'string') {
       return queryKey.api_key;
     }
 

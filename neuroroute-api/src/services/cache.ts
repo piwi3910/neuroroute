@@ -271,7 +271,7 @@ export class CacheService {
       let memory = 0;
       try {
         const info = await this.fastify.redis.info('memory');
-        const match = info.match(/used_memory:(\d+)/);
+        const match = /used_memory:(\d+)/.exec(info);
         if (match) {
           memory = parseInt(match[1], 10);
         }

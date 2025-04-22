@@ -13,7 +13,20 @@ export default tseslint.config(
       },
     },
     rules: {
-      // Customize rules here if needed
+      // Enforce .js extensions in imports for ESM compatibility
+      'import/extensions': [
+        'error',
+        'ignorePackages',
+        {
+          'js': 'never',
+          'ts': 'never',
+          'tsx': 'never',
+          'mts': 'never',
+          'cts': 'never'
+        }
+      ],
+      // Ensure correct import extensions for ESM
+      'import/no-unresolved': 'off', // TypeScript handles this
     },
   },
   // Disable type checking for JavaScript files

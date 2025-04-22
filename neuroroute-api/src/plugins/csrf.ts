@@ -58,7 +58,6 @@ const csrfPlugin: FastifyPluginAsync = async (fastify) => {
       // Store in session
       // Type-safe session access
       if (request.session) {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
         request.session.csrfToken = token;
       }
       

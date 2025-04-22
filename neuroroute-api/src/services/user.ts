@@ -210,7 +210,7 @@ export class UserService {
    * @param expiresIn Token expiration time (default: 1h)
    * @returns JWT token
    */
-  generateToken(user: UserData, expiresIn: string = '1h'): string {
+  generateToken(user: UserData, expiresIn = '1h'): string {
     return this.fastify.jwt.sign(
       {
         sub: user.id,

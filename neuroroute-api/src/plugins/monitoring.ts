@@ -72,7 +72,7 @@ const defaultOptions: MonitoringOptions = {
 };
 
 // Metrics storage
-let requestMetrics: RequestMetrics[] = [];
+const requestMetrics: RequestMetrics[] = [];
 let errorCount = 0;
 let requestCount = 0;
 let lastMetricsCheck = Date.now();

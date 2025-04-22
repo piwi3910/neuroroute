@@ -83,7 +83,7 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       
       // Optionally fetch additional user data
       if (request.user && request.user.sub) {
-        const userId = request.user.sub as string;
+        const userId = request.user.sub;
         const userData = await userService.getUserById(userId);
         
         if (!userData) {
@@ -118,14 +118,14 @@ const authPlugin: FastifyPluginAsync = async (fastify) => {
       // Check for JWT token
       const authHeader = request.headers.authorization;
       
-      if (authHeader && authHeader.startsWith('Bearer ')) {
+      if (authHeader?.startsWith('Bearer ')) {
         try {
           // Try JWT authentication
           await request.jwtVerify();
           
           // JWT is valid, fetch user data
           if (request.user && request.user.sub) {
-            const userId = request.user.sub as string;
+            const userId = request.user.sub;
             const userData = await userService.getUserById(userId);
             
             if (userData) {

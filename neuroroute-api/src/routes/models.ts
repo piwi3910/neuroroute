@@ -109,7 +109,7 @@ const modelsRoutes: FastifyPluginAsync = async (fastify) => {
       }
 
       // In a real implementation, this would come from a service or database
-      const models: { [key: string]: ModelInfo } = {
+      const models: Record<string, ModelInfo> = {
         'gpt-4': {
           id: 'gpt-4',
           name: 'GPT-4',

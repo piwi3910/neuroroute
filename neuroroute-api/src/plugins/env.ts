@@ -1,6 +1,6 @@
 import { FastifyPluginAsync } from 'fastify';
 import fastifyEnv from '@fastify/env';
-import { envSchema, AppConfig, getConfig } from '../config.js';
+import { envSchema, getConfig } from '../config.js';
 
 /**
  * Environment configuration plugin

@@ -34,9 +34,9 @@ export interface ModelConfiguration {
  */
 export class ConfigManager {
   private fastify: FastifyInstance;
-  private configCache: Map<string, any> = new Map();
-  private modelConfigCache: Map<string, ModelConfiguration> = new Map();
-  private listeners: Map<string, Function[]> = new Map();
+  private configCache = new Map<string, any>();
+  private modelConfigCache = new Map<string, ModelConfiguration>();
+  private listeners = new Map<string, Function[]>();
   private cacheEnabled: boolean;
   private cacheTtl: number; // milliseconds
   private encryptionKey: Buffer;

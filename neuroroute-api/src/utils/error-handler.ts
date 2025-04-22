@@ -1,55 +1,61 @@
 import { FastifyInstance, FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 import { v4 as uuidv4 } from 'uuid';
 
-// Error types enum
-export enum ErrorType {
+// Error types as const object instead of enum
+export const ErrorType = {
   // General errors
-  INTERNAL = 'INTERNAL_ERROR',
-  BAD_REQUEST = 'BAD_REQUEST',
-  UNAUTHORIZED = 'UNAUTHORIZED',
-  FORBIDDEN = 'FORBIDDEN',
-  NOT_FOUND = 'NOT_FOUND',
-  CONFLICT = 'CONFLICT',
+  INTERNAL: 'INTERNAL_ERROR',
+  BAD_REQUEST: 'BAD_REQUEST',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  FORBIDDEN: 'FORBIDDEN',
+  NOT_FOUND: 'NOT_FOUND',
+  CONFLICT: 'CONFLICT',
   
   // Model-specific errors
-  MODEL_UNAVAILABLE = 'MODEL_UNAVAILABLE',
-  MODEL_TIMEOUT = 'MODEL_TIMEOUT',
-  MODEL_RATE_LIMITED = 'MODEL_RATE_LIMITED',
-  MODEL_AUTHENTICATION = 'MODEL_AUTHENTICATION',
-  MODEL_QUOTA_EXCEEDED = 'MODEL_QUOTA_EXCEEDED',
-  MODEL_CONTENT_FILTERED = 'MODEL_CONTENT_FILTERED',
-  MODEL_INVALID_REQUEST = 'MODEL_INVALID_REQUEST',
-  MODEL_CONTEXT_LENGTH = 'MODEL_CONTEXT_LENGTH',
+  MODEL_UNAVAILABLE: 'MODEL_UNAVAILABLE',
+  MODEL_TIMEOUT: 'MODEL_TIMEOUT',
+  MODEL_RATE_LIMITED: 'MODEL_RATE_LIMITED',
+  MODEL_AUTHENTICATION: 'MODEL_AUTHENTICATION',
+  MODEL_QUOTA_EXCEEDED: 'MODEL_QUOTA_EXCEEDED',
+  MODEL_CONTENT_FILTERED: 'MODEL_CONTENT_FILTERED',
+  MODEL_INVALID_REQUEST: 'MODEL_INVALID_REQUEST',
+  MODEL_CONTEXT_LENGTH: 'MODEL_CONTEXT_LENGTH',
   
   // Network errors
-  NETWORK_ERROR = 'NETWORK_ERROR',
-  TIMEOUT = 'TIMEOUT',
+  NETWORK_ERROR: 'NETWORK_ERROR',
+  TIMEOUT: 'TIMEOUT',
   
   // Database errors
-  DB_ERROR = 'DB_ERROR',
-  DB_CONNECTION = 'DB_CONNECTION',
-  DB_QUERY = 'DB_QUERY',
+  DB_ERROR: 'DB_ERROR',
+  DB_CONNECTION: 'DB_CONNECTION',
+  DB_QUERY: 'DB_QUERY',
   
   // Cache errors
-  CACHE_ERROR = 'CACHE_ERROR',
-  CACHE_MISS = 'CACHE_MISS',
+  CACHE_ERROR: 'CACHE_ERROR',
+  CACHE_MISS: 'CACHE_MISS',
   
   // Router errors
-  ROUTER_NO_MODELS = 'ROUTER_NO_MODELS',
-  ROUTER_ALL_MODELS_FAILED = 'ROUTER_ALL_MODELS_FAILED'
-}
+  ROUTER_NO_MODELS: 'ROUTER_NO_MODELS',
+  ROUTER_ALL_MODELS_FAILED: 'ROUTER_ALL_MODELS_FAILED'
+} as const;
 
-// Error severity levels
-export enum ErrorSeverity {
-  DEBUG = 'debug',
-  INFO = 'info',
-  WARN = 'warn',
-  ERROR = 'error',
-  FATAL = 'fatal'
-}
+// Error severity levels as const object instead of enum
+export const ErrorSeverity = {
+  DEBUG: 'debug',
+  INFO: 'info',
+  WARN: 'warn',
+  ERROR: 'error',
+  FATAL: 'fatal'
+} as const;
 
 // Type for error details
 export type ErrorDetails = Record<string, unknown>;
+
+// Type for error type values
+export type ErrorTypeValue = typeof ErrorType[keyof typeof ErrorType];
+
+// Type for error severity values
+export type ErrorSeverityValue = typeof ErrorSeverity[keyof typeof ErrorSeverity];
 
 // Custom error class
 export class AppError extends Error {
@@ -63,11 +69,11 @@ export class AppError extends Error {
   timestamp: Date;
 
   constructor(
-    message: string, 
-    statusCode = 500, 
-    code = ErrorType.INTERNAL, 
+    message: string,
+    statusCode = 500,
+    code: ErrorTypeValue = ErrorType.INTERNAL,
     details?: ErrorDetails,
-    severity = ErrorSeverity.ERROR,
+    severity: ErrorSeverityValue = ErrorSeverity.ERROR,
     retryable = false,
     source?: string
   ) {
@@ -94,10 +100,10 @@ export class ModelError extends AppError {
     message: string,
     provider: string,
     modelId: string,
-    code = ErrorType.MODEL_UNAVAILABLE,
+    code: ErrorTypeValue = ErrorType.MODEL_UNAVAILABLE,
     statusCode = 503,
     details?: ErrorDetails,
-    severity = ErrorSeverity.ERROR,
+    severity: ErrorSeverityValue = ErrorSeverity.ERROR,
     retryable = true
   ) {
     super(message, statusCode, code, details, severity, retryable, 'model');
@@ -113,10 +119,10 @@ export class NetworkError extends AppError {
   constructor(
     message: string,
     endpoint?: string,
-    code = ErrorType.NETWORK_ERROR,
+    code: ErrorTypeValue = ErrorType.NETWORK_ERROR,
     statusCode = 503,
     details?: ErrorDetails,
-    severity = ErrorSeverity.ERROR,
+    severity: ErrorSeverityValue = ErrorSeverity.ERROR,
     retryable = true
   ) {
     super(message, statusCode, code, details, severity, retryable, 'network');
@@ -131,10 +137,10 @@ export class DatabaseError extends AppError {
   constructor(
     message: string,
     operation?: string,
-    code = ErrorType.DB_ERROR,
+    code: ErrorTypeValue = ErrorType.DB_ERROR,
     statusCode = 500,
     details?: ErrorDetails,
-    severity = ErrorSeverity.ERROR,
+    severity: ErrorSeverityValue = ErrorSeverity.ERROR,
     retryable = false
   ) {
     super(message, statusCode, code, details, severity, retryable, 'database');

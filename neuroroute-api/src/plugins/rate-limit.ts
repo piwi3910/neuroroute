@@ -10,12 +10,10 @@ interface RateLimitOptions {
   };
   
   // Endpoint-specific rate limits
-  endpoints?: {
-    [key: string]: {
+  endpoints?: Record<string, {
       max: number;
       timeWindow: number;
-    };
-  };
+    }>;
   
   // Rate limit by different keys
   keyGenerator?: (request: FastifyRequest) => string;
@@ -150,7 +148,7 @@ const rateLimitPlugin: FastifyPluginAsync<RateLimitOptions> = async (fastify, op
   // Add preHandler hook for rate limiting
   fastify.addHook('preHandler', async (request: FastifyRequest, reply: FastifyReply) => {
     // Skip rate limiting if configured to do so
-    if (mergedOptions.skip && mergedOptions.skip(request)) {
+    if (mergedOptions.skip?.(request)) {
       return;
     }
     
