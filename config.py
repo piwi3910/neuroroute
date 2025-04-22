@@ -111,7 +111,7 @@ class FallbackSettings(BaseSettings):
 class ApiSettings(BaseSettings):
     """Settings for API configuration"""
     app_name: str = Field("NeuroRoute", description="Application name")
-    app_version: str = Field("0.1.0", description="Application version")
+    app_version: str = Field("0.0.2", description="Application version")
     app_description: str = Field(
         "Intelligent LLM Router API that forwards prompts to the best-suited LLM backend",
         description="Application description"
