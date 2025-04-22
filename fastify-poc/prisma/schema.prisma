@@ -1,0 +1,73 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// API key model
+model ApiKey {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  name        String
+  description String?
+  enabled     Boolean   @default(true)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  expiresAt   DateTime? @map("expires_at")
+  
+  // Permissions and rate limits
+  permissions String[]
+  rateLimit   Int?      @map("rate_limit")
+  
+  // Usage tracking
+  usageCount  Int       @default(0) @map("usage_count")
+  lastUsedAt  DateTime? @map("last_used_at")
+  
+  @@map("api_keys")
+}
+
+// Settings model
+model Setting {
+  id        String   @id
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  
+  @@map("settings")
+}
+
+// Model configuration
+model ModelConfig {
+  id          String   @id
+  name        String
+  provider    String
+  enabled     Boolean  @default(true)
+  priority    Int      @default(0)
+  capabilities String[]
+  config      Json
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  
+  @@map("model_configs")
+}
+
+// Request log
+model RequestLog {
+  id            String   @id @default(uuid())
+  requestId     String   @map("request_id")
+  prompt        String
+  modelUsed     String   @map("model_used")
+  promptTokens  Int      @map("prompt_tokens")
+  responseTokens Int     @map("response_tokens")
+  totalTokens   Int      @map("total_tokens")
+  processingTime Float   @map("processing_time")
+  createdAt     DateTime @default(now()) @map("created_at")
+  
+  @@map("request_logs")
+}
