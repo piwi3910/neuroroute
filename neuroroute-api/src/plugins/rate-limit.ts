@@ -216,6 +216,6 @@ declare module 'fastify' {
 
 export default fp(rateLimitPlugin, {
   name: 'rate-limit',
-  fastify: '4.x',
-  dependencies: ['@fastify/redis'],
+  fastify: '5.x',
+  dependencies: ['redis'],
 });

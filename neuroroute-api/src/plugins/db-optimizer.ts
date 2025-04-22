@@ -208,16 +208,12 @@ const dbOptimizerPlugin: FastifyPluginAsync<DbOptimizerOptions> = async (fastify
   });
   
   // Add health check to the health endpoint
-  fastify.addHook('onReady', async () => {
-    if (fastify.hasRoute({ method: 'GET', url: '/health' })) {
-      const healthCheck = createHealthCheck(prisma, fastify.log);
-      
-      // Extend existing health check
-      fastify.addHook('preHandler', async (request, reply) => {
-        if (request.url === '/health') {
-          request.dbHealthy = await healthCheck();
-        }
-      });
+  const healthCheck = createHealthCheck(prisma, fastify.log);
+  
+  // Extend existing health check
+  fastify.addHook('preHandler', async (request, reply) => {
+    if (request.url === '/health') {
+      request.dbHealthy = await healthCheck();
     }
   });
 };
@@ -239,6 +235,6 @@ declare module 'fastify' {
 
 export default fp(dbOptimizerPlugin, {
   name: 'db-optimizer',
-  fastify: '4.x',
+  fastify: '5.x',
   dependencies: ['prisma'],
 });

@@ -328,5 +328,5 @@ declare module 'fastify' {
 
 export default fp(monitoringPlugin, {
   name: 'monitoring',
-  fastify: '4.x',
+  fastify: '5.x',
 });
