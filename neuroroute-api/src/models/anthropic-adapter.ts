@@ -130,18 +130,12 @@ export class AnthropicAdapter extends BaseModelAdapter {
         }
       }
 
-      // Prepare request
-      // Add date suffix to model name if not already present
-      let modelName = this.modelId;
-      if (!modelName.includes('-202')) {
-        // Add date suffix based on model
-        if (modelName.includes('opus')) {
-          modelName = 'claude-3-opus-20240229';
-        } else if (modelName.includes('sonnet')) {
-          modelName = 'claude-3-sonnet-20240229';
-        } else if (modelName.includes('haiku')) {
-          modelName = 'claude-3-haiku-20240229';
-        }
+      // Use claude-3-7-sonnet-latest as the default model
+      let modelName = 'claude-3-7-sonnet-latest';
+      
+      // If a specific model is requested and it's not the default model pattern, use it
+      if (this.modelId !== 'claude-3-sonnet' && this.modelId !== 'claude-3-opus' && this.modelId !== 'claude-3-haiku') {
+        modelName = this.modelId;
       }
       
       const requestOptions = {
@@ -239,18 +233,12 @@ export class AnthropicAdapter extends BaseModelAdapter {
         }
       }
 
-      // Prepare request
-      // Add date suffix to model name if not already present
-      let modelName = this.modelId;
-      if (!modelName.includes('-202')) {
-        // Add date suffix based on model
-        if (modelName.includes('opus')) {
-          modelName = 'claude-3-opus-20240229';
-        } else if (modelName.includes('sonnet')) {
-          modelName = 'claude-3-sonnet-20240229';
-        } else if (modelName.includes('haiku')) {
-          modelName = 'claude-3-haiku-20240229';
-        }
+      // Use claude-3-7-sonnet-latest as the default model
+      let modelName = 'claude-3-7-sonnet-latest';
+      
+      // If a specific model is requested and it's not the default model pattern, use it
+      if (this.modelId !== 'claude-3-sonnet' && this.modelId !== 'claude-3-opus' && this.modelId !== 'claude-3-haiku') {
+        modelName = this.modelId;
       }
       
       const requestOptions = {

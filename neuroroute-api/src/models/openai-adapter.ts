@@ -189,8 +189,14 @@ export class OpenAIAdapter extends BaseModelAdapter {
         }
 
         // Prepare request
+        // Use gpt-4.1 as the default model for gpt-4 requests
+        let modelName = this.modelId;
+        if (this.modelId === 'gpt-4') {
+          modelName = 'gpt-4.1';
+        }
+        
         const requestOptions = {
-          model: this.modelId,
+          model: modelName,
           messages: [{ role: 'user', content: prompt }],
           max_tokens: options?.maxTokens ?? 1024,
           temperature: options?.temperature ?? 0.7,
@@ -496,8 +502,14 @@ export class OpenAIAdapter extends BaseModelAdapter {
         }
 
         // Prepare request
+        // Use gpt-4.1 as the default model for gpt-4 requests
+        let modelName = this.modelId;
+        if (this.modelId === 'gpt-4') {
+          modelName = 'gpt-4.1';
+        }
+        
         const requestOptions = {
-          model: this.modelId,
+          model: modelName,
           messages: [{ role: 'user', content: prompt }],
           max_tokens: options?.maxTokens ?? 1024,
           temperature: options?.temperature ?? 0.7,
