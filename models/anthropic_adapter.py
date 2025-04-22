@@ -60,6 +60,8 @@ class AnthropicAdapter(ModelAdapter):
             
             # Make request to Anthropic API using the messages API
             # This is the recommended approach for all new Claude models
+            # Make request to Anthropic API using the messages API
+            # This is the recommended approach for all new Claude models
             message = await self.client.messages.create(
                 model=self.model,
                 max_tokens=max_tokens,

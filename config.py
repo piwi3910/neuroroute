@@ -3,7 +3,7 @@ import json
 from enum import Enum, auto
 from typing import Dict, Any, List, Optional, Union, Set, Literal
 from functools import lru_cache
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 from pydantic import validator, root_validator
 import logging
@@ -116,7 +116,7 @@ class ApiSettings(BaseSettings):
         "Intelligent LLM Router API that forwards prompts to the best-suited LLM backend",
         description="Application description"
     )
-    cors_origins: List[str] = Field(["*"], description="CORS allowed origins")
+    cors_origins: Union[List[str], str] = Field(default="*", description="Allowed CORS origins (comma-separated string or JSON array)")
     max_request_size: int = Field(10 * 1024 * 1024, description="Maximum request size in bytes")
     default_request_timeout: float = Field(60.0, description="Default request timeout in seconds")
     health_check_interval: int = Field(300, description="Model health check interval in seconds")
@@ -306,16 +306,17 @@ class Settings(BaseSettings):
         "case_sensitive": False,
         "env_nested_delimiter": "__",  # This allows env vars like LOG__LEVEL=DEBUG
         "extra": "allow",  # Allow extra fields for backward compatibility
-        "populate_by_name": True  # Allow population by field name as well as alias
+        "populate_by_name": True,  # Allow population by field name as well as alias
     }
-
+    
 @lru_cache()
 def get_settings():
     """
     Creates and returns the application settings.
     The @lru_cache decorator ensures this is only called once during the application lifetime.
     """
-    settings = Settings()
+    # Create settings instance, explicitly specifying the env file
+    settings = Settings(_env_file=".env")
     
     # Set up app_name and app_version in api section for backward compatibility
     if settings.app_name and not settings.api.app_name:
@@ -353,7 +354,7 @@ def get_model_registry(settings: Settings) -> Dict[str, Dict[str, Any]]:
                 "quality": 3  # Low priority for quality
             },
             "max_prompt_length": 4000,
-            "adapter_class": "LocalLmStudioAdapter",
+            "adapter_class": "LocalLMStudioAdapter",
             "fallback_models": ["openai"],  # Models to try if this one fails
             "health_check_interval": 600,  # Check health every 10 minutes
             "description": "Local LM Studio model - fastest and cheapest, good for simple tasks",

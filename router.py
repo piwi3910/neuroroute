@@ -71,9 +71,10 @@ class ModelRouter:
         self._initialize_adapters()
         
         # Set up health check background task if enabled
-        self.health_check_interval = self.settings.api.health_check_interval
+        # Default health check interval if not specified in model config
+        self.default_health_check_interval = self.settings.api.health_check_interval
         self.health_check_task = None
-        if self.settings.api.enable_model_health_checks and self.health_check_interval > 0:
+        if self.settings.api.enable_model_health_checks and self.settings.api.health_check_interval > 0:
             self._start_health_check_task()
             
         # Capability map for quickly finding models with specific capabilities
@@ -81,6 +82,20 @@ class ModelRouter:
         
         logger.info(f"NeuroRoute router initialized with {len(self.adapters)} model adapters")
     
+    @staticmethod
+    def _camel_to_snake(name):
+        """Converts CamelCase string to snake_case, handling specific cases."""
+        import re
+        # Handle specific cases that don't follow standard snake_case conversion
+        if name == "LocalLMStudioAdapter":
+            return "local_lmstudio_adapter"
+        if name == "OpenAIAdapter":
+            return "openai_adapter"
+
+        # Fallback to standard snake_case conversion for other cases
+        s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
+        return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
+
     def _initialize_adapters(self):
         """Initialize all model adapters from the registry using factory pattern."""
         # Static adapter map for backward compatibility
@@ -100,7 +115,7 @@ class ModelRouter:
                     # Try to dynamically load the adapter class
                     try:
                         # Assume adapters are in models package
-                        module = importlib.import_module(f"models.{adapter_class_name.lower()}")
+                        module = importlib.import_module(f"models.{self._camel_to_snake(adapter_class_name)}")
                         adapter_class = getattr(module, adapter_class_name)
                     except (ImportError, AttributeError) as e:
                         logger.warning(f"Could not dynamically load adapter {adapter_class_name}: {e}")
@@ -122,7 +137,7 @@ class ModelRouter:
                     "status": "unknown",
                     "last_checked": None,
                     "error": None,
-                    "next_check_time": time.time() + model_config.get("health_check_interval", self.health_check_interval)
+                    "next_check_time": time.time() + model_config.get("health_check_interval", self.settings.api.health_check_interval)
                 }
                 self.model_metrics[model_key] = {
                     "requests": 0,
@@ -210,7 +225,7 @@ class ModelRouter:
             try:
                 adapter = self.adapters[model_key]
                 model_config = self.model_registry.get(model_key, {})
-                health_check_interval = model_config.get("health_check_interval", self.health_check_interval)
+                health_check_interval = model_config.get("health_check_interval", self.settings.api.health_check_interval)
                 
                 # Check if adapter has a health check method
                 if hasattr(adapter, "check_health") and callable(getattr(adapter, "check_health")):
@@ -1285,7 +1300,6 @@ class ModelRouter:
 
 
 # Factory function with caching for better performance
-@lru_cache()
 def get_router(
     settings: Optional[Settings] = None,
     classifier: Optional[PromptClassifier] = None,
