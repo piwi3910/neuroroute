@@ -250,6 +250,17 @@ export class RouterService {
   private loadDefaultModels(): void {
     // Default model information
     this.models = {
+      'gpt-4.1': {
+        id: 'gpt-4.1',
+        provider: 'openai',
+        capabilities: ['text-generation', 'code-generation', 'reasoning', 'knowledge-retrieval'],
+        cost: 0.03,
+        quality: 0.95,
+        maxTokens: 8192,
+        available: true,
+        latency: 2000,
+        priority: 3
+      },
       'gpt-4': {
         id: 'gpt-4',
         provider: 'openai',
@@ -271,6 +282,17 @@ export class RouterService {
         available: true,
         latency: 1000,
         priority: 2
+      },
+      'claude-3-7-sonnet-latest': {
+        id: 'claude-3-7-sonnet-latest',
+        provider: 'anthropic',
+        capabilities: ['text-generation', 'code-generation', 'reasoning', 'knowledge-retrieval'],
+        cost: 0.025,
+        quality: 0.95,
+        maxTokens: 200000,
+        available: true,
+        latency: 2000,
+        priority: 3
       },
       'claude-3-opus': {
         id: 'claude-3-opus',
@@ -645,7 +667,7 @@ export class RouterService {
     
     if (classification.type === 'analytical' && classification.complexity === 'very-complex') {
       // For complex analytical tasks, use a reasoning model followed by a knowledge model
-      modelChain = ['claude-3-opus', 'gpt-4'];
+      modelChain = ['claude-3-7-sonnet-latest', 'gpt-4.1'];
     } else if (classification.type === 'code' && classification.features.includes('reasoning')) {
       // For complex code tasks, use a reasoning model followed by a code-specific model
       modelChain = ['gpt-4', 'claude-3-sonnet'];
@@ -820,18 +842,18 @@ export class RouterService {
       // If no options provided, use simple selection
       // For this proof of concept, we'll use a simple mapping
       const intentModelMap: Record<string, string> = {
-        'general': 'gpt-4',
-        'code': 'gpt-4',
-        'creative': 'claude-3-opus',
-        'factual': 'gpt-4',
-        'unknown': 'claude-3-opus',
+        'general': 'gpt-4.1',
+        'code': 'gpt-4.1',
+        'creative': 'claude-3-7-sonnet-latest',
+        'factual': 'gpt-4.1',
+        'unknown': 'claude-3-7-sonnet-latest',
         'mathematical': 'gpt-3.5-turbo',
         'conversational': 'claude-3-haiku',
-        'analytical': 'claude-3-opus'
+        'analytical': 'claude-3-7-sonnet-latest'
       };
       
-      // Get the model for this intent, or default to gpt-4
-      return intentModelMap[classification.type] || 'gpt-4';
+      // Get the model for this intent, or default to gpt-4.1
+      return intentModelMap[classification.type] || 'gpt-4.1';
     }
     
     // Get available models
@@ -841,7 +863,7 @@ export class RouterService {
     
     if (availableModels.length === 0) {
       // If no models are available, return default
-      return 'gpt-4';
+      return 'gpt-4.1';
     }
     
     // Filter models that have the required capabilities
