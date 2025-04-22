@@ -204,7 +204,7 @@ export function setupErrorHandler(fastify: FastifyInstance): void {
     // Create error response
     const errorResponse: ErrorResponse = {
       error: {
-        message: error.message || 'An unexpected error occurred',
+        message: error.message ?? 'An unexpected error occurred',
         code: errorCode,
         statusCode,
         correlationId,

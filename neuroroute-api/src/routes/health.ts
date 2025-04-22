@@ -41,7 +41,7 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
     },
     handler: async (request, reply) => {
       // Get config with fallback
-      const config = (fastify as any).config || {};
+      const config = (fastify as any).config ?? {};
       const startTime = process.hrtime();
       
       // Helper functions for health checks

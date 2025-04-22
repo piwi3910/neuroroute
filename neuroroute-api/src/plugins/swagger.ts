@@ -6,10 +6,10 @@ import fp from 'fastify-plugin';
 // Swagger configuration plugin
 const swaggerPlugin: FastifyPluginAsync = async (fastify) => {
   // Use type assertion to access config property
-  const config = (fastify as any).config || {};
-  const host = config.HOST || 'localhost';
-  const port = config.PORT || 3000;
-  const nodeEnv = config.NODE_ENV || 'development';
+  const config = (fastify as any).config ?? {};
+  const host = config.HOST ?? 'localhost';
+  const port = config.PORT ?? 3000;
+  const nodeEnv = config.NODE_ENV ?? 'development';
 
   // Register Swagger UI
   await fastify.register(fastifySwagger, {
@@ -49,7 +49,7 @@ Rate limit headers are included in all responses:
 - \`X-RateLimit-Remaining\`: Remaining requests in the current window
 - \`X-RateLimit-Reset\`: Time when the rate limit resets (Unix timestamp)
         `,
-        version: process.env.npm_package_version || '1.0.0',
+        version: process.env.npm_package_version ?? '1.0.0',
         contact: {
           name: 'API Support',
           email: 'support@example.com',
@@ -66,7 +66,7 @@ Rate limit headers are included in all responses:
       },
       servers: [
         {
-          url: config.API_URL || `http://${host}:${port}`,
+          url: config.API_URL ?? `http://${host}:${port}`,
           description: nodeEnv === 'production' ? 'Production server' : 'Development server',
         },
       ],
@@ -244,7 +244,7 @@ Rate limit headers are included in all responses:
 
   // Register Swagger UI
   await fastify.register(fastifySwaggerUi, {
-    routePrefix: config.SWAGGER_ROUTE || '/documentation',
+    routePrefix: config.SWAGGER_ROUTE ?? '/documentation',
     uiConfig: {
       docExpansion: 'list',
       deepLinking: true,
@@ -261,7 +261,7 @@ Rate limit headers are included in all responses:
   // Add hook to include API version in all responses
   fastify.addHook('onSend', async (request, reply, payload) => {
     if (!reply.hasHeader('X-API-Version')) {
-      reply.header('X-API-Version', process.env.npm_package_version || '1.0.0');
+      reply.header('X-API-Version', process.env.npm_package_version ?? '1.0.0');
     }
     return payload;
   });

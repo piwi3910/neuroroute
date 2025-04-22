@@ -70,7 +70,7 @@ export function createLogger(options: LoggerOptions = {}, config?: any) {
   const logLevel = options.level || (config?.LOG_LEVEL) || 'info';
   
   // Sensitive fields to redact from logs
-  const redactFields = options.redact || [
+  const redactFields = options.redact ?? [
     'req.headers.authorization',
     'req.headers["x-api-key"]',
     'req.body.api_key',
@@ -95,9 +95,9 @@ export function createLogger(options: LoggerOptions = {}, config?: any) {
         return {
           method: req.method,
           url: req.url,
-          correlationId: req.headers['x-correlation-id'] || req.id,
+          correlationId: req.headers['x-correlation-id'] ?? req.id,
           userAgent: req.headers['user-agent'],
-          ip: req.ip || req.ips || req.headers['x-forwarded-for']
+          ip: req.ip ?? req.ips || req.headers['x-forwarded-for']
         };
       },
       err: pino.stdSerializers.err
@@ -170,12 +170,10 @@ export function setupRequestLogging(fastify: FastifyInstance) {
   // Add correlation ID and request ID to each request
   fastify.addHook('onRequest', (request, reply, done) => {
     // Get or generate correlation ID
-    const correlationId = request.headers['x-correlation-id'] || 
-                          randomUUID();
+    const correlationId = request.headers['x-correlation-id'] ?? randomUUID();
     
     // Generate or use existing request ID
-    const requestId = request.headers['x-request-id'] || 
-                      request.id || 
+    const requestId = request.headers['x-request-id'] ?? request.id || 
                       `req-${Math.random().toString(36).substring(2, 15)}`;
     
     // Add IDs to response headers
@@ -237,7 +235,7 @@ export function setupRequestLogging(fastify: FastifyInstance) {
       metrics.responseTimeMin = Math.min(metrics.responseTimeMin, responseTime);
       
       // Update status code metrics
-      metrics.statusCodes[statusCode] = (metrics.statusCodes[statusCode] || 0) + 1;
+      metrics.statusCodes[statusCode] = (metrics.statusCodes[statusCode] ?? 0) + 1;
       
       // Update endpoint metrics
       const endpointMetrics = metrics.endpoints[endpoint];
@@ -307,11 +305,11 @@ export function setupRequestLogging(fastify: FastifyInstance) {
     }, error.message);
     
     // Determine status code
-    const statusCode = error.statusCode || 500;
+    const statusCode = error.statusCode ?? 500;
     
     // Send error response
     reply.status(statusCode).send({
-      error: error.message || 'Internal Server Error',
+      error: error.message ?? 'Internal Server Error',
       statusCode,
       requestId: request.id,
       correlationId: request.correlationId

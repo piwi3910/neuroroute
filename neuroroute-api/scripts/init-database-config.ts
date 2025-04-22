@@ -17,7 +17,7 @@ const prisma = new PrismaClient();
 
 // Encryption helpers
 function generateEncryptionKey(): Buffer {
-  const jwtSecret = process.env.JWT_SECRET || 'development-jwt-secret-change-in-production';
+  const jwtSecret = process.env.JWT_SECRET ?? 'development-jwt-secret-change-in-production';
   return crypto.createHash('sha256').update(jwtSecret).digest();
 }
 

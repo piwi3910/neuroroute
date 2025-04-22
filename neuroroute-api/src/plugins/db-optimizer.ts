@@ -82,13 +82,13 @@ const createQueryMiddleware = (options: DbOptimizerOptions, log: any) => {
         
         // Track by model
         const modelKey = `${model}.${action}`;
-        metrics.queryCountByModel[modelKey] = (metrics.queryCountByModel[modelKey] || 0) + 1;
-        metrics.queryTimeByModel[modelKey] = (metrics.queryTimeByModel[modelKey] || 0) + queryTime;
+        metrics.queryCountByModel[modelKey] = (metrics.queryCountByModel[modelKey] ?? 0) + 1;
+        metrics.queryTimeByModel[modelKey] = (metrics.queryTimeByModel[modelKey] ?? 0) + queryTime;
         
         // Check for slow queries
         if (options.logSlowQueries && queryTime > (options.slowQueryThreshold || 500)) {
           metrics.slowQueries++;
-          metrics.slowQueriesByModel[modelKey] = (metrics.slowQueriesByModel[modelKey] || 0) + 1;
+          metrics.slowQueriesByModel[modelKey] = (metrics.slowQueriesByModel[modelKey] ?? 0) + 1;
           
           // Log slow query
           log.warn({

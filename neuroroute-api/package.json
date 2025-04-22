@@ -15,6 +15,7 @@
     "test:all": "./scripts/run-tests.sh",
     "lint": "eslint .",
     "fix:imports": "ts-node scripts/fix-import-extensions.ts",
+    "fix:logical-or": "ts-node scripts/replace-logical-or.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"
   },

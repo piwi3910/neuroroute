@@ -10,7 +10,7 @@ import createUserService from '../services/user.js';
  */
 const authPlugin: FastifyPluginAsync = async (fastify) => {
   // Get JWT secret from config
-  const jwtSecret = fastify.config.JWT_SECRET || 'default-jwt-secret-for-development';
+  const jwtSecret = fastify.config.JWT_SECRET ?? 'default-jwt-secret-for-development';
   
   // Register JWT plugin
   await fastify.register(fastifyJwt, {

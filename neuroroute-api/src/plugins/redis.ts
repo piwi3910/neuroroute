@@ -8,9 +8,9 @@ import fastifyRedis from '@fastify/redis';
  */
 const redisPlugin: FastifyPluginAsync = async (fastify) => {
   // Get Redis configuration from fastify.config with fallbacks
-  const config = (fastify as any).config || {};
-  const REDIS_URL = config.REDIS_URL || 'redis://localhost:6379';
-  const REDIS_CACHE_TTL = config.REDIS_CACHE_TTL || 300;
+  const config = (fastify as any).config ?? {};
+  const REDIS_URL = config.REDIS_URL ?? 'redis://localhost:6379';
+  const REDIS_CACHE_TTL = config.REDIS_CACHE_TTL ?? 300;
 
   try {
     // Register Redis plugin

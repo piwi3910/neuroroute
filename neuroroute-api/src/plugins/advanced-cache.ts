@@ -221,13 +221,13 @@ const generateCacheKey = (
   
   // Add user/API key
   if (options.strategies?.byUser) {
-    const apiKey = request.headers['x-api-key'] || 'anonymous';
+    const apiKey = request.headers['x-api-key'] ?? 'anonymous';
     parts.push(apiKey.toString());
   }
   
   // Add content type
   if (options.strategies?.byContentType) {
-    const contentType = request.headers['accept'] || '*/*';
+    const contentType = request.headers['accept'] ?? '*/*';
     parts.push(contentType.toString());
   }
   
@@ -374,7 +374,7 @@ const advancedCachePlugin: FastifyPluginAsync<CacheOptions> = async (fastify, op
       
       // Only compress if enabled and payload is large enough
       const compressed = mergedOptions.compression?.enabled && 
-                         serialized.length >= (mergedOptions.compression.minSize || 0)
+                         serialized.length >= (mergedOptions.compression.minSize ?? 0)
         ? compressData(serialized)
         : serialized;
       

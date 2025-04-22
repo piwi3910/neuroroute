@@ -183,11 +183,11 @@ export class RouterService {
                 id: config.id,
                 provider: config.provider,
                 capabilities: config.capabilities,
-                cost: config.config.cost || 0,
-                quality: config.config.quality || 0.5,
-                maxTokens: config.config.maxTokens || 4096,
+                cost: config.config.cost ?? 0,
+                quality: config.config.quality ?? 0.5,
+                maxTokens: config.config.maxTokens ?? 4096,
                 available: true, // Will be checked by checkModelAvailability
-                latency: config.config.latency || 2000,
+                latency: config.config.latency ?? 2000,
                 priority: config.priority
               };
             }
@@ -906,7 +906,7 @@ export class RouterService {
     }
     
     // Get the model for this intent, or default to gpt-3.5-turbo
-    const selectedModel = intentModelMap[classification.type] || 'gpt-3.5-turbo';
+    const selectedModel = intentModelMap[classification.type] ?? 'gpt-3.5-turbo';
     
     // Check if selected model is available
     if (this.isModelAvailable(selectedModel)) {

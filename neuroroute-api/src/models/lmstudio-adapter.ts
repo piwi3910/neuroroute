@@ -336,7 +336,7 @@ export class LMStudioAdapter extends BaseModelAdapter {
         chunk: '',
         done: true,
         model: this.modelId,
-        finishReason: finishReason || 'stop'
+        finishReason: finishReason ?? 'stop'
       };
       this.logStreamingChunk(finalChunk);
       yield finalChunk;

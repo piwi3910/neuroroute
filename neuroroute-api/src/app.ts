@@ -76,16 +76,16 @@ export async function registerPlugins(server: FastifyInstance): Promise<void> {
   
   // Register database optimizer
   // Get configuration with fallbacks for database optimizer
-  const dbConfig = (server as any).config || {};
+  const dbConfig = (server as any).config ?? {};
   
   await server.register(dbOptimizerPlugin, {
     logQueries: dbConfig.NODE_ENV === 'development',
     logSlowQueries: true,
-    slowQueryThreshold: dbConfig.DB_SLOW_QUERY_THRESHOLD || 500,
+    slowQueryThreshold: dbConfig.DB_SLOW_QUERY_THRESHOLD ?? 500,
     collectMetrics: true,
     pool: {
-      min: dbConfig.DB_POOL_MIN || 2,
-      max: dbConfig.DB_POOL_MAX || 10,
+      min: dbConfig.DB_POOL_MIN ?? 2,
+      max: dbConfig.DB_POOL_MAX ?? 10,
     }
   });
   
@@ -94,16 +94,16 @@ export async function registerPlugins(server: FastifyInstance): Promise<void> {
   await server.register(authPlugin);
   
   // Only register Redis if enabled (with fallback)
-  const config = (server as any).config || {};
+  const config = (server as any).config ?? {};
   if (config.ENABLE_CACHE !== false) {
     await server.register(redisPlugin);
     
     // Register advanced cache plugin
-    const cacheConfig = (server as any).config || {};
+    const cacheConfig = (server as any).config ?? {};
     await server.register(advancedCachePlugin, {
       enabled: cacheConfig.ENABLE_CACHE !== false,
-      ttl: cacheConfig.CACHE_TTL || 300,
-      prefix: cacheConfig.CACHE_PREFIX || 'cache:',
+      ttl: cacheConfig.CACHE_TTL ?? 300,
+      prefix: cacheConfig.CACHE_PREFIX ?? 'cache:',
       storage: 'redis',
       strategies: {
         byPath: true,
@@ -132,15 +132,15 @@ export async function registerPlugins(server: FastifyInstance): Promise<void> {
   }
   
   // Get configuration with fallbacks for monitoring
-  const monConfig = (server as any).config || {};
+  const monConfig = (server as any).config ?? {};
   
   // Register monitoring plugin
   await server.register(monitoringPlugin, {
     enableMetrics: monConfig.ENABLE_METRICS !== false,
-    metricsPath: monConfig.METRICS_PATH || '/metrics',
+    metricsPath: monConfig.METRICS_PATH ?? '/metrics',
     collectDefaultMetrics: true,
     enableTracing: monConfig.NODE_ENV === 'production',
-    sampleRate: monConfig.METRICS_SAMPLE_RATE || 1.0,
+    sampleRate: monConfig.METRICS_SAMPLE_RATE ?? 1.0,
     exporters: {
       prometheus: true,
       console: monConfig.NODE_ENV === 'development',
@@ -148,22 +148,22 @@ export async function registerPlugins(server: FastifyInstance): Promise<void> {
   });
   
   // Get configuration with fallbacks for rate limiting
-  const rateConfig = (server as any).config || {};
+  const rateConfig = (server as any).config ?? {};
   
   // Register rate limiting plugin
   await server.register(rateLimitPlugin, {
     global: {
-      max: rateConfig.RATE_LIMIT_MAX || 100,
-      timeWindow: rateConfig.RATE_LIMIT_WINDOW || 60000, // 1 minute
+      max: rateConfig.RATE_LIMIT_MAX ?? 100,
+      timeWindow: rateConfig.RATE_LIMIT_WINDOW ?? 60000, // 1 minute
     },
     endpoints: {
       '/prompt': {
-        max: rateConfig.PROMPT_RATE_LIMIT_MAX || 20,
-        timeWindow: rateConfig.PROMPT_RATE_LIMIT_WINDOW || 60000,
+        max: rateConfig.PROMPT_RATE_LIMIT_MAX ?? 20,
+        timeWindow: rateConfig.PROMPT_RATE_LIMIT_WINDOW ?? 60000,
       },
       '/admin/.*': {
-        max: rateConfig.ADMIN_RATE_LIMIT_MAX || 50,
-        timeWindow: rateConfig.ADMIN_RATE_LIMIT_WINDOW || 60000,
+        max: rateConfig.ADMIN_RATE_LIMIT_MAX ?? 50,
+        timeWindow: rateConfig.ADMIN_RATE_LIMIT_WINDOW ?? 60000,
       }
     },
     store: rateConfig.REDIS_URL ? 'redis' : 'memory',
@@ -199,10 +199,10 @@ async function start() {
     await registerRoutes(server);
 
     // Get configuration with fallbacks
-    const config = (server as any).config || {};
-    const PORT = config.PORT || 3000;
-    const HOST = config.HOST || '0.0.0.0';
-    const NODE_ENV = config.NODE_ENV || 'development';
+    const config = (server as any).config ?? {};
+    const PORT = config.PORT ?? 3000;
+    const HOST = config.HOST ?? '0.0.0.0';
+    const NODE_ENV = config.NODE_ENV ?? 'development';
 
     // Start listening
     await server.listen({ port: PORT, host: HOST });

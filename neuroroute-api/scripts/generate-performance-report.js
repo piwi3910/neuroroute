@@ -37,7 +37,7 @@ try {
 let version = 'unknown';
 try {
   const packageJson = JSON.parse(fs.readFileSync(PACKAGE_JSON, 'utf8'));
-  version = packageJson.version || 'unknown';
+  version = packageJson.version ?? 'unknown';
 } catch (error) {
   console.warn(`Warning: Could not read package.json: ${error.message}`);
 }
@@ -59,16 +59,16 @@ const timestamp = new Date().toISOString();
 function generateReport(results) {
   // Calculate summary statistics
   const summary = {
-    totalRequests: results.totalRequests || 0,
-    successfulRequests: results.successfulRequests || 0,
-    failedRequests: results.failedRequests || 0,
-    totalDuration: results.totalDuration || 0,
-    averageResponseTime: results.averageResponseTime || 0,
-    minResponseTime: results.minResponseTime || 0,
-    maxResponseTime: results.maxResponseTime || 0,
-    p95ResponseTime: results.p95ResponseTime || 0,
-    p99ResponseTime: results.p99ResponseTime || 0,
-    requestsPerSecond: results.requestsPerSecond || 0,
+    totalRequests: results.totalRequests ?? 0,
+    successfulRequests: results.successfulRequests ?? 0,
+    failedRequests: results.failedRequests ?? 0,
+    totalDuration: results.totalDuration ?? 0,
+    averageResponseTime: results.averageResponseTime ?? 0,
+    minResponseTime: results.minResponseTime ?? 0,
+    maxResponseTime: results.maxResponseTime ?? 0,
+    p95ResponseTime: results.p95ResponseTime ?? 0,
+    p99ResponseTime: results.p99ResponseTime ?? 0,
+    requestsPerSecond: results.requestsPerSecond ?? 0,
   };
 
   // Calculate success rate
@@ -77,19 +77,19 @@ function generateReport(results) {
     : 0;
 
   // Generate endpoint-specific data for charts
-  const endpoints = results.endpoints || {};
+  const endpoints = results.endpoints ?? {};
   const endpointNames = Object.keys(endpoints);
   const responseTimeData = endpointNames.map(name => ({
     name,
-    avg: endpoints[name].averageResponseTime || 0,
-    min: endpoints[name].minResponseTime || 0,
-    max: endpoints[name].maxResponseTime || 0,
-    p95: endpoints[name].p95ResponseTime || 0,
+    avg: endpoints[name].averageResponseTime ?? 0,
+    min: endpoints[name].minResponseTime ?? 0,
+    max: endpoints[name].maxResponseTime ?? 0,
+    p95: endpoints[name].p95ResponseTime ?? 0,
   }));
 
   const throughputData = endpointNames.map(name => ({
     name,
-    rps: endpoints[name].requestsPerSecond || 0,
+    rps: endpoints[name].requestsPerSecond ?? 0,
   }));
 
   // Generate HTML
@@ -269,10 +269,10 @@ function generateReport(results) {
             <td>${endpoint.requests || 0}</td>
             <td>${endpoint.successful || 0}</td>
             <td>${(endpoint.averageResponseTime || 0).toFixed(2)}</td>
-            <td>${(endpoint.minResponseTime || 0).toFixed(2)}</td>
-            <td>${(endpoint.maxResponseTime || 0).toFixed(2)}</td>
-            <td>${(endpoint.p95ResponseTime || 0).toFixed(2)}</td>
-            <td>${(endpoint.requestsPerSecond || 0).toFixed(2)}</td>
+            <td>${(endpoint.minResponseTime ?? 0).toFixed(2)}</td>
+            <td>${(endpoint.maxResponseTime ?? 0).toFixed(2)}</td>
+            <td>${(endpoint.p95ResponseTime ?? 0).toFixed(2)}</td>
+            <td>${(endpoint.requestsPerSecond ?? 0).toFixed(2)}</td>
           </tr>
         `;
       }).join('')}
@@ -293,8 +293,8 @@ function generateReport(results) {
       ${(results.concurrencyTests || []).map(test => `
         <tr>
           <td>${test.concurrentUsers}</td>
-          <td>${(test.averageResponseTime || 0).toFixed(2)}</td>
-          <td>${(test.requestsPerSecond || 0).toFixed(2)}</td>
+          <td>${(test.averageResponseTime ?? 0).toFixed(2)}</td>
+          <td>${(test.requestsPerSecond ?? 0).toFixed(2)}</td>
           <td>${((test.successfulRequests / test.totalRequests) * 100 || 0).toFixed(2)}%</td>
         </tr>
       `).join('')}
@@ -384,7 +384,7 @@ function generateReport(results) {
         labels: ${JSON.stringify((results.concurrencyTests || []).map(t => t.concurrentUsers))},
         datasets: [{
           label: 'Avg Response Time (ms)',
-          data: ${JSON.stringify((results.concurrencyTests || []).map(t => t.averageResponseTime || 0))},
+          data: ${JSON.stringify((results.concurrencyTests || []).map(t => t.averageResponseTime ?? 0))},
           backgroundColor: 'rgba(52, 152, 219, 0.1)',
           borderColor: 'rgba(52, 152, 219, 1)',
           borderWidth: 2,

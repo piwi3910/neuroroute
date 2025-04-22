@@ -311,7 +311,7 @@ export class AnthropicAdapter extends BaseModelAdapter {
         chunk: '',
         done: true,
         model: this.modelId,
-        finishReason: stopReason || 'stop'
+        finishReason: stopReason ?? 'stop'
       };
       this.logStreamingChunk(finalChunk);
       yield finalChunk;

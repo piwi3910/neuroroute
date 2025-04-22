@@ -58,7 +58,7 @@ export class CacheService {
       cacheEnabled: this.enabled,
       cacheTtl: this.options.ttl,
       cachePrefix: this.options.prefix,
-      cacheNamespace: this.options.namespace || 'default'
+      cacheNamespace: this.options.namespace ?? 'default'
     }, 'Cache service initialized');
   }
 
@@ -285,7 +285,7 @@ export class CacheService {
         keys: keys.slice(0, 10), // Return first 10 keys for debugging
         memory,
         prefix: this.options.prefix,
-        namespace: this.options.namespace || 'default',
+        namespace: this.options.namespace ?? 'default',
         ttl: this.options.ttl,
       };
     } catch (error) {
