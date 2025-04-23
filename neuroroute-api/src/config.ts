@@ -60,6 +60,7 @@ export interface AppConfig {
   FALLBACK_ENABLED: boolean;
   CHAIN_ENABLED: boolean;
   CACHE_STRATEGY: CacheStrategy;
+  AUTO_DEGRADED_MODE: string; // Add AUTO_DEGRADED_MODE
 }
 
 // Environment-specific configurations
@@ -110,6 +111,7 @@ export const defaultConfig: AppConfig = {
   FALLBACK_ENABLED: true,
   CHAIN_ENABLED: false,
   CACHE_STRATEGY: 'default',
+  AUTO_DEGRADED_MODE: 'false', // Add AUTO_DEGRADED_MODE default
 };
 
 // Environment schema for @fastify/env plugin

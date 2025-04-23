@@ -6,7 +6,7 @@
     "dev": "ts-node-esm src/app.ts",
     "build": "tsc && npm run fix:esm-comprehensive",
     "start": "node dist/src/app.js",
-    "test": "jest",
+    "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "test:watch": "jest --watch",
     "test:unit": "jest test/unit",
     "test:integration": "jest test/integration",

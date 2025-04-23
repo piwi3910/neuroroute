@@ -1,5 +1,4 @@
 import Fastify, { FastifyInstance } from 'fastify';
-import { Server, IncomingMessage, ServerResponse } from 'http';
 import { AppConfig } from './config.js';
 
 // Import plugins
@@ -24,6 +23,7 @@ import modelsRoutes from './routes/models.js';
 import promptRoutes from './routes/prompt.js';
 import adminRoutes from './routes/admin.js';
 import dashboardRoutes from './routes/dashboard.js';
+import chatRoutes from './routes/chat.js';
 
 // Declare module augmentation for Fastify
 declare module 'fastify' {
@@ -191,6 +191,7 @@ export async function registerRoutes(server: FastifyInstance): Promise<void> {
   await server.register(promptRoutes, { prefix: '/prompt' });
   await server.register(adminRoutes, { prefix: '/admin' });
   await server.register(dashboardRoutes, { prefix: '/dashboard' });
+  await server.register(chatRoutes, { prefix: '/chat' });
 }
 
 /**

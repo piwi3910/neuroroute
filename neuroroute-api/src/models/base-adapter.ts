@@ -22,6 +22,9 @@ export interface ModelResponse {
   model: string;
   processingTime: number;
   raw?: RawProviderResponse; // Raw response from the provider
+  functionCall?: FunctionCall;
+  toolCalls?: ToolCall[];
+  messages?: ChatMessage[]; // Full conversation history
 }
 
 // Streaming chunk interface
@@ -34,6 +37,76 @@ export interface StreamingChunk {
   errorDetails?: string;
 }
 
+// Message role type
+export type MessageRole = 'system' | 'user' | 'assistant' | 'function' | 'tool';
+
+// Base message interface
+export interface ChatMessage {
+  role: MessageRole;
+  content: string | null;
+  name?: string;
+}
+
+// System message
+export interface SystemMessage extends ChatMessage {
+  role: 'system';
+  content: string;
+}
+
+// User message
+export interface UserMessage extends ChatMessage {
+  role: 'user';
+  content: string;
+}
+
+// Assistant message
+export interface AssistantMessage extends ChatMessage {
+  role: 'assistant';
+  content: string;
+  function_call?: FunctionCall;
+  tool_calls?: ToolCall[];
+}
+
+// Function message
+export interface FunctionMessage extends ChatMessage {
+  role: 'function';
+  content: string;
+  name: string;
+}
+
+// Tool message
+export interface ToolMessage extends ChatMessage {
+  role: 'tool';
+  content: string;
+  tool_call_id: string;
+}
+
+// Function definition
+export interface FunctionDefinition {
+  name: string;
+  description?: string;
+  parameters: Record<string, unknown>;
+}
+
+// Function call
+export interface FunctionCall {
+  name: string;
+  arguments: string;
+}
+
+// Tool definition
+export interface ToolDefinition {
+  type: 'function';
+  function: FunctionDefinition;
+}
+
+// Tool call
+export interface ToolCall {
+  id: string;
+  type: 'function';
+  function: FunctionCall;
+}
+
 // Model request options
 export interface ModelRequestOptions {
   maxTokens?: number;
@@ -43,6 +116,9 @@ export interface ModelRequestOptions {
   presencePenalty?: number;
   stop?: string[];
   stream?: boolean;
+  messages?: ChatMessage[]; // Add messages for chat completions
+  tools?: ToolDefinition[]; // Add tools for function calling
+  toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } }; // Add tool choice
   // Error handling and retry options
   maxRetries?: number;
   initialBackoff?: number;

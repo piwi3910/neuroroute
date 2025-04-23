@@ -1,4 +1,5 @@
 // Jest setup file
+import { jest } from '@jest/globals';
 
 // Set test environment variables
 process.env.NODE_ENV = 'test';
@@ -12,6 +13,7 @@ process.env.REDIS_URL = 'redis://localhost:6379/1';
 jest.setTimeout(10000);
 
 // Mock console methods to reduce noise in tests
+// @ts-ignore
 global.console = {
   ...console,
   log: jest.fn(),

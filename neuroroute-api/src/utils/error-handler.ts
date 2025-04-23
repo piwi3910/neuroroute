@@ -452,7 +452,34 @@ export const errors = {
       new AppError(message, 503, ErrorType.ROUTER_NO_MODELS, details, ErrorSeverity.ERROR, false, 'router'),
       
     allModelsFailed: (message = 'All models failed', details?: ErrorDetails) =>
-      new AppError(message, 503, ErrorType.ROUTER_ALL_MODELS_FAILED, details, ErrorSeverity.ERROR, false, 'router')
+      new AppError(message, 503, ErrorType.ROUTER_ALL_MODELS_FAILED, details, ErrorSeverity.ERROR, false, 'router'),
+
+    /**
+     * Create a no capable models error
+     * @param message Error message
+     * @param details Additional details
+     * @returns AppError instance
+     */
+    noCapableModels: (message: string, details?: ErrorDetails) =>
+      new AppError(message, 500, ErrorType.ROUTER_NO_MODELS, details, ErrorSeverity.ERROR, false, 'router'),
+
+    /**
+     * Create a model request failed error
+     * @param message Error message
+     * @param details Additional details
+     * @returns AppError instance
+     */
+    modelRequestFailed: (message: string, details?: ErrorDetails) =>
+      new AppError(message, 500, ErrorType.MODEL_UNAVAILABLE, details, ErrorSeverity.ERROR, true, 'router'),
+
+    /**
+     * Create an invalid request error for the router
+     * @param message Error message
+     * @param details Additional details
+     * @returns AppError instance
+     */
+    invalidRequest: (message: string, details?: ErrorDetails) =>
+      new AppError(message, 400, ErrorType.BAD_REQUEST, details, ErrorSeverity.WARN, false, 'router'),
   }
 };
 

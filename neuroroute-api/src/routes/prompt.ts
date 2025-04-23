@@ -1,5 +1,5 @@
 import { FastifyPluginAsync } from 'fastify';
-import createRouterService from '../services/router.js';
+import { createRouterService } from '../services/router.js';
 
 /**
  * Prompt routing endpoint

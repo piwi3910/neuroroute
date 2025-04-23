@@ -2,10 +2,9 @@ import { FastifyInstance } from 'fastify';
 import createClassifierService, { ClassifiedIntent } from './classifier.js';
 import createCacheService from './cache.js';
 import crypto from 'crypto';
-import { trackModelUsage, startTrace, endTrace } from '../utils/logger.js';
-import { performance } from 'perf_hooks';
+import { trackModelUsage } from '../utils/logger.js';
 import { getModelAdapter } from '../models/adapter-registry.js';
-import { ModelRequestOptions } from '../models/base-adapter.js';
+import { ModelRequestOptions, ChatMessage, ToolDefinition, ModelResponse } from '../models/base-adapter.js';
 import { errors } from '../utils/error-handler.js';
 
 /**
@@ -29,6 +28,19 @@ export interface RouterResponse {
   processing_time?: number;
   cost?: number;
   model_chain?: string[];
+  functionCall?: any;
+  toolCalls?: any[];
+  messages?: ChatMessage[];
+}
+
+/**
+ * Chat completion response
+ */
+export interface ChatCompletionResponse extends ModelResponse {
+  // Additional fields specific to chat completions
+  id?: string;
+  created?: number;
+  cached?: boolean; // Add cached property
 }
 
 /**
@@ -436,7 +448,7 @@ export class RouterService {
       
       // If model chaining is enabled and appropriate for this prompt
       if (routingOptions.chainEnabled && this.shouldUseModelChain(classification)) {
-        return await this.executeModelChain(prompt, classification, maxTokens, temperature, routingOptions);
+        return await this.executeModelChain(prompt, classification, maxTokens, temperature);
       }
       
       // Select the best model based on classification and options
@@ -498,7 +510,7 @@ export class RouterService {
           }
         );
       }
-
+      
       // Send to selected model
       const response = await this.sendToModel(selectedModel, prompt, maxTokens, temperature);
       
@@ -542,6 +554,258 @@ export class RouterService {
   }
 
   /**
+   * Route a chat completion request to the appropriate model
+   *
+   * @param messages Array of chat messages
+   * @param modelId Optional specific model ID to use
+   * @param maxTokens Maximum tokens to generate
+   * @param temperature Sampling temperature
+   * @param tools Optional array of tool definitions
+   * @param toolChoice How to use tools ('auto', 'none', or specific tool)
+   * @param options Routing options
+   * @returns The chat completion response
+   */
+  async routeChatCompletion(
+    messages: ChatMessage[],
+    modelId?: string,
+    maxTokens = 1024,
+    temperature = 0.7,
+    tools?: ToolDefinition[],
+    toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } },
+    options?: RoutingOptions
+  ): Promise<ChatCompletionResponse> {
+    const startTime = Date.now();
+    
+    try {
+      // Extract the user's prompt from the messages array
+      // We'll use the last user message as the prompt for classification and routing
+      let userPrompt = '';
+      for (let i = messages.length - 1; i >= 0; i--) {
+        if (messages[i].role === 'user' && messages[i].content) {
+          userPrompt = messages[i].content!;
+          break;
+        }
+      }
+      
+      if (!userPrompt) {
+        throw errors.router.invalidRequest(
+          'No user message found in the messages array',
+          { messageCount: messages.length }
+        );
+      }
+      
+      // Merge provided options with defaults
+      const routingOptions = {
+        ...this.defaultOptions,
+        ...options
+      };
+      
+      // Generate a cache key for this chat completion
+      const messagesJson = JSON.stringify(messages);
+      const cacheKey = this.generateCacheKey(
+        messagesJson, 
+        modelId, 
+        maxTokens, 
+        temperature,
+        tools ? JSON.stringify(tools) : undefined,
+        toolChoice ? JSON.stringify(toolChoice) : undefined
+      );
+      
+      // Check if caching is enabled based on strategy
+      if (routingOptions.cacheStrategy !== 'none') {
+        // Determine if we should check cache based on strategy
+        let shouldCheckCache = true;
+        
+        if (routingOptions.cacheStrategy === 'minimal' && userPrompt.length < 50) {
+          // Only cache very short prompts in minimal mode
+          shouldCheckCache = false;
+        }
+        
+        if (shouldCheckCache) {
+          // Try to get from cache
+          const cachedResponse = await this.cache.get<ChatCompletionResponse>(cacheKey);
+          if (cachedResponse) {
+            this.fastify.log.info({
+              cacheKey,
+              modelId: cachedResponse.model,
+              strategy: routingOptions.cacheStrategy
+            }, 'Cache hit for chat completion');
+            
+            return {
+              ...cachedResponse,
+              cached: true,
+            };
+          }
+        }
+      }
+      
+      // Classify the prompt for advanced routing
+      const classification = await this.classifier.classifyPrompt(userPrompt);
+      
+      // If a specific model is requested and it's available, use it
+      if (modelId && this.isModelAvailable(modelId)) {
+        // Get the appropriate adapter for this model
+        const adapter = getModelAdapter(this.fastify, modelId);
+        
+        // Prepare request options
+        const options: ModelRequestOptions = {
+          maxTokens,
+          temperature,
+          messages, // Pass the full messages array
+          ...(tools ? { tools } : {}),
+          ...(toolChoice ? { toolChoice } : {})
+        };
+        
+        // Generate completion using the adapter
+        const modelResponse = await adapter.generateCompletion(userPrompt, options);
+        
+        // Create chat completion response
+        const chatResponse: ChatCompletionResponse = {
+          ...modelResponse,
+          id: `chatcmpl-${crypto.randomBytes(12).toString('hex')}`,
+          created: Math.floor(Date.now() / 1000)
+        };
+        
+        // Add processing time
+        chatResponse.processingTime = Date.now() - startTime;
+        
+        // Cache the response if enabled
+        if (routingOptions.cacheStrategy !== 'none') {
+          const ttl = this.determineCacheTTL(classification, routingOptions.cacheTTL ?? 300);
+          await this.cache.set(cacheKey, chatResponse, ttl);
+        }
+        
+        return chatResponse;
+      }
+      
+      // If model chaining is enabled and appropriate for this prompt
+      if (routingOptions.chainEnabled && this.shouldUseModelChain(classification)) {
+        // For chat completions, we don't support model chaining yet
+        // This could be implemented in the future
+        this.fastify.log.warn({
+          classification,
+          messageCount: messages.length
+        }, 'Model chaining not supported for chat completions yet');
+      }
+      
+      // Select the best model based on classification and options
+      const selectedModel = this.selectModel(classification, routingOptions);
+      
+      // Check if selected model is available
+      if (!this.isModelAvailable(selectedModel) && routingOptions.fallbackEnabled) {
+        // Find fallback model with multi-level strategy
+        const fallbackResult = await this.executeFallbackStrategy(
+          selectedModel,
+          userPrompt,
+          classification,
+          maxTokens,
+          temperature,
+          routingOptions
+        );
+        
+        // If fallback was successful, return the response
+        if (fallbackResult.success && fallbackResult.response) {
+          // We need to convert the RouterResponse to a ChatCompletionResponse
+          // This is a simplified conversion - in a real implementation, you'd want to
+          // properly handle all the fields
+          const chatResponse: ChatCompletionResponse = {
+            text: fallbackResult.response.response,
+            tokens: fallbackResult.response.tokens,
+            model: fallbackResult.response.model_used,
+            processingTime: fallbackResult.response.processing_time ?? 0,
+            id: `chatcmpl-${crypto.randomBytes(12).toString('hex')}`,
+            created: Math.floor(Date.now() / 1000),
+            messages: [...messages, { role: 'assistant', content: fallbackResult.response.response }]
+          };
+          
+          // Cache the response if enabled
+          if (routingOptions.cacheStrategy !== 'none') {
+            const ttl = this.determineCacheTTL(classification, routingOptions.cacheTTL ?? 300);
+            await this.cache.set(cacheKey, chatResponse, ttl);
+          }
+          
+          return chatResponse;
+        }
+        
+        // If all fallbacks failed and we're in degraded mode, return a degraded response
+        if (this.degradedModeEnabled || routingOptions.degradedMode) {
+          const degradedResponse = this.createDegradedResponse(userPrompt, classification, fallbackResult.error);
+          
+          // Convert to chat completion response
+          const chatResponse: ChatCompletionResponse = {
+            text: degradedResponse.response,
+            tokens: degradedResponse.tokens,
+            model: degradedResponse.model_used,
+            processingTime: degradedResponse.processing_time ?? 0,
+            id: `chatcmpl-${crypto.randomBytes(12).toString('hex')}`,
+            created: Math.floor(Date.now() / 1000),
+            messages: [...messages, { role: 'assistant', content: degradedResponse.response }]
+          };
+          
+          return chatResponse;
+        }
+        
+        // If all fallbacks failed and we're not in degraded mode, throw an error
+        throw errors.router.allModelsFailed(
+          'All models failed to process the chat completion request',
+          {
+            originalModel: selectedModel,
+            classification: classification.type,
+            error: fallbackResult.error?.message
+          }
+        );
+      }
+      
+      // Get the appropriate adapter for the selected model
+      const adapter = getModelAdapter(this.fastify, selectedModel);
+      
+      // Prepare request options
+      const adapterOptions: ModelRequestOptions = {
+        maxTokens,
+        temperature,
+        messages, // Pass the full messages array
+        ...(tools ? { tools } : {}),
+        ...(toolChoice ? { toolChoice } : {})
+      };
+      
+      // Generate completion using the adapter
+      const modelResponse = await adapter.generateCompletion(userPrompt, adapterOptions);
+      
+      // Create chat completion response
+      const chatResponse: ChatCompletionResponse = {
+        ...modelResponse,
+        id: `chatcmpl-${crypto.randomBytes(12).toString('hex')}`,
+        created: Math.floor(Date.now() / 1000)
+      };
+      
+      // Add processing time
+      chatResponse.processingTime = Date.now() - startTime;
+      
+      // Cache the response if enabled
+      if (routingOptions.cacheStrategy !== 'none') {
+        const ttl = this.determineCacheTTL(classification, routingOptions.cacheTTL ?? 300);
+        await this.cache.set(cacheKey, chatResponse, ttl);
+      }
+      
+      return chatResponse;
+    } catch (error) {
+      // Log error with context
+      this.fastify.log.error({
+        error,
+        messageCount: messages.length,
+        modelId,
+      }, 'Failed to route chat completion');
+      
+      // Rethrow with better message
+      if (error instanceof Error) {
+        throw new Error(`Failed to route chat completion: ${error.message}`);
+      } else {
+        throw new Error(`Failed to route chat completion: ${String(error)}`);
+      }
+    }
+  }
+
+  /**
    * Classify the prompt to determine intent
    * @param prompt The user prompt
    * @returns The classified intent
@@ -562,11 +826,6 @@ export class RouterService {
     };
   }
 
-  /**
-   * Select the best model based on the classified intent
-   * @param intent The classified intent
-   * @returns The selected model ID
-   */
   /**
    * Determine if a model is currently available
    * @param modelId Model ID
@@ -603,7 +862,6 @@ export class RouterService {
     classification: ClassifiedIntent,
     maxTokens: number,
     temperature: number,
-    options: RoutingOptions
   ): Promise<RouterResponse> {
     const startTime = Date.now();
     
@@ -616,446 +874,81 @@ export class RouterService {
     } else if (classification.type === 'code' && classification.features.includes('reasoning')) {
       // For complex code tasks, use a reasoning model followed by a code-specific model
       modelChain = ['gpt-4.1', 'claude-3-7-sonnet-latest'];
-    } else if (classification.features.includes('summarization')) {
-      // For summarization tasks, use a fast model followed by a quality model
-      modelChain = ['gpt-4.1', 'claude-3-7-sonnet-latest'];
     } else {
       // Default chain for other complex tasks
       modelChain = ['gpt-4.1', 'claude-3-7-sonnet-latest'];
     }
     
-    // Filter out unavailable models
-    modelChain = modelChain.filter(model => this.isModelAvailable(model));
-    
-    // If no models are available, fall back to default selection
-    if (modelChain.length === 0) {
-      const fallbackModel = this.selectFallbackModel('gpt-4.1', classification);
-      return await this.sendToModel(fallbackModel, prompt, maxTokens, temperature);
-    }
-    
-    // Execute the chain
-    let currentPrompt = prompt;
+    const responses: string[] = [];
+    const modelsUsed: string[] = [];
     let totalPromptTokens = 0;
     let totalCompletionTokens = 0;
-    let finalResponse = '';
     
-    for (let i = 0; i < modelChain.length; i++) {
-      const modelId = modelChain[i];
-      const isLastModel = i === modelChain.length - 1;
-      
-      // Add chain context for intermediate models
-      let chainPrompt = currentPrompt;
-      if (!isLastModel) {
-        chainPrompt = `${currentPrompt}\n\nThis is part of a model chain. Please provide a detailed analysis that will be refined by another model.`;
+    this.fastify.log.info({
+      modelChain,
+      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : '')
+    }, 'Executing model chain');
+
+    for (const modelId of modelChain) {
+      try {
+        // Get the appropriate adapter for this model
+        const adapter = getModelAdapter(this.fastify, modelId);
+        
+        // Prepare request options
+        const adapterOptions: ModelRequestOptions = {
+          maxTokens,
+          temperature,
+          messages: [{ role: 'user', content: prompt }], // Pass the current prompt
+        };
+        
+        // Generate completion using the adapter
+        const modelResponse = await adapter.generateCompletion(prompt, adapterOptions);
+        
+        responses.push(modelResponse.text);
+        modelsUsed.push(modelResponse.model);
+        totalPromptTokens += modelResponse.tokens.prompt;
+        totalCompletionTokens += modelResponse.tokens.completion;
+        
+        // Use the response from the current model as the prompt for the next model
+        prompt = modelResponse.text;
+        
+        this.fastify.log.debug({
+          modelId,
+          tokens: modelResponse.tokens,
+          responseLength: modelResponse.text.length
+        }, 'Model chain step completed');
+      } catch (error) {
+        this.fastify.log.error({
+          modelId,
+          error
+        }, 'Model chain step failed');
+        
+        // If a step fails, stop the chain and return the partial response
+        break;
       }
-      
-      // Send to current model in chain
-      const response = await this.sendToModel(
-        modelId,
-        chainPrompt,
-        isLastModel ? maxTokens : Math.min(maxTokens, 2048), // Limit tokens for intermediate steps
-        isLastModel ? temperature : 0.5 // Lower temperature for intermediate steps
-      );
-      
-      // Update token counts
-      totalPromptTokens += response.tokens.prompt;
-      totalCompletionTokens += response.tokens.completion;
-      
-      // Update prompt for next model in chain
-      if (!isLastModel) {
-        currentPrompt = `Original prompt: "${prompt}"\n\nPrevious model analysis: "${response.response}"\n\nPlease refine and improve the above analysis.`;
-      }
-      
-      // Save final response
-      finalResponse = response.response;
     }
     
-    // Create combined response
-    const combinedResponse: RouterResponse = {
-      response: finalResponse,
-      model_used: modelChain[modelChain.length - 1],
-      model_chain: modelChain,
+    const combinedResponse = responses.join('\n\n');
+    
+    const routerResponse: RouterResponse = {
+      response: combinedResponse,
+      model_used: modelsUsed.join(' -> '),
       tokens: {
         prompt: totalPromptTokens,
         completion: totalCompletionTokens,
         total: totalPromptTokens + totalCompletionTokens
       },
-      classification: {
-        intent: classification.type,
-        confidence: classification.confidence,
-        features: classification.features,
-        domain: classification.domain
-      },
+      model_chain: modelsUsed,
       processing_time: Date.now() - startTime
     };
     
-    return combinedResponse;
-  }
+    this.fastify.log.info({
+      modelsUsed,
+      totalTokens: routerResponse.tokens.total,
+      processingTime: routerResponse.processing_time
+    }, 'Model chain execution completed');
 
-  /**
-   * Determine cache TTL based on classification
-   * @param classification Prompt classification
-   * @param defaultTTL Default TTL in seconds
-   * @returns TTL in seconds
-   */
-  private determineCacheTTL(classification: ClassifiedIntent, defaultTTL: number): number {
-    // Factual and mathematical content can be cached longer
-    if (classification.type === 'factual' || classification.type === 'mathematical') {
-      return defaultTTL * 2; // Double the TTL
-    }
-    
-    // Conversational content should be cached for less time
-    if (classification.type === 'conversational') {
-      return Math.floor(defaultTTL / 2); // Half the TTL
-    }
-    
-    // Simple queries can be cached longer
-    if (classification.complexity === 'simple') {
-      return Math.floor(defaultTTL * 1.5); // 1.5x the TTL
-    }
-    
-    // Complex queries should be cached for less time
-    if (classification.complexity === 'very-complex') {
-      return Math.floor(defaultTTL / 1.5); // 2/3 the TTL
-    }
-    
-    return defaultTTL;
-  }
-
-  /**
-   * Select a fallback model when the primary model is unavailable
-   * @param primaryModel The unavailable primary model
-   * @param classification The prompt classification
-   * @returns Fallback model ID
-   */
-  private selectFallbackModel(primaryModel: string, _classification: ClassifiedIntent): string {
-    // Get primary model info
-    const primaryModelInfo = this.models[primaryModel];
-    
-    if (!primaryModelInfo) {
-      // If primary model not found, return default fallback
-      return 'gpt-3.5-turbo';
-    }
-    
-    // Get available models except the primary
-    const availableModels = Object.values(this.models).filter(model =>
-      model.id !== primaryModel && this.isModelAvailable(model.id)
-    );
-    
-    if (availableModels.length === 0) {
-      // If no models are available, return default (even though it's unavailable)
-      return 'gpt-3.5-turbo';
-    }
-    
-    // Find models from the same provider
-    const sameProviderModels = availableModels.filter(model =>
-      model.provider === primaryModelInfo.provider
-    );
-    
-    if (sameProviderModels.length > 0) {
-      // Sort by quality (descending)
-      sameProviderModels.sort((a, b) => b.quality - a.quality);
-      return sameProviderModels[0].id;
-    }
-    
-    // Find models with similar capabilities
-    const similarCapabilityModels = availableModels.filter(model =>
-      primaryModelInfo.capabilities.every(capability =>
-        model.capabilities.includes(capability)
-      )
-    );
-    
-    if (similarCapabilityModels.length > 0) {
-      // Sort by quality (descending)
-      similarCapabilityModels.sort((a, b) => b.quality - a.quality);
-      return similarCapabilityModels[0].id;
-    }
-    
-    // Default to highest quality available model
-    availableModels.sort((a, b) => b.quality - a.quality);
-    return availableModels[0].id;
-  }
-
-  /**
-   * Select the best model based on the classified intent and routing options
-   * @param classification The classified intent
-   * @param options Routing options
-   * @returns The selected model ID
-   */
-  private selectModel(classification: ClassifiedIntent, options?: RoutingOptions): string {
-    if (!options) {
-      // If no options provided, use simple selection
-      // For this proof of concept, we'll use a simple mapping
-      const intentModelMap: Record<string, string> = {
-        'general': 'gpt-4.1',
-        'code': 'gpt-4.1',
-        'creative': 'claude-3-7-sonnet-latest',
-        'factual': 'gpt-4.1',
-        'unknown': 'claude-3-7-sonnet-latest',
-        'mathematical': 'gpt-4.1',
-        'conversational': 'claude-3-7-sonnet-latest',
-        'analytical': 'claude-3-7-sonnet-latest'
-      };
-      
-      // Get the model for this intent, or default to gpt-4.1
-      return intentModelMap[classification.type] || 'gpt-4.1';
-    }
-    
-    // Get available models
-    const availableModels = Object.values(this.models).filter(model =>
-      this.isModelAvailable(model.id)
-    );
-    
-    if (availableModels.length === 0) {
-      // If no models are available, return default
-      return 'gpt-4.1';
-    }
-    
-    // Filter models that have the required capabilities
-    let suitableModels = availableModels.filter(model =>
-      classification.features.every(feature => model.capabilities.includes(feature))
-    );
-    
-    // If no models have all required capabilities, get models with most capabilities
-    if (suitableModels.length === 0) {
-      const maxCapabilities = Math.max(...availableModels.map(model =>
-        classification.features.filter(feature =>
-          model.capabilities.includes(feature)
-        ).length
-      ));
-      
-      suitableModels = availableModels.filter(model =>
-        classification.features.filter(feature =>
-          model.capabilities.includes(feature)
-        ).length === maxCapabilities
-      );
-    }
-    
-    // Apply optimization strategies
-    if (options.costOptimize) {
-      // Sort by cost (ascending)
-      suitableModels.sort((a, b) => a.cost - b.cost);
-      return suitableModels[0].id;
-    } else if (options.latencyOptimize) {
-      // Sort by latency (ascending)
-      suitableModels.sort((a, b) => a.latency - b.latency);
-      return suitableModels[0].id;
-    } else if (options.qualityOptimize) {
-      // Sort by quality (descending)
-      suitableModels.sort((a, b) => b.quality - a.quality);
-      return suitableModels[0].id;
-    }
-    
-    // Default selection based on intent type and complexity
-    const intentModelMap: Record<string, string> = {
-      'general': 'gpt-4.1',
-      'code': 'gpt-4.1',
-      'creative': 'claude-3-7-sonnet-latest',
-      'analytical': 'claude-3-7-sonnet-latest',
-      'factual': 'gpt-4.1',
-      'mathematical': 'gpt-4.1',
-      'conversational': 'claude-3-7-sonnet-latest'
-    };
-    
-    // Adjust based on complexity
-    if (classification.complexity === 'very-complex' || classification.complexity === 'complex') {
-      if (classification.type === 'code' || classification.type === 'analytical') {
-        return 'gpt-4.1';
-      } else if (classification.type === 'creative') {
-        return 'claude-3-7-sonnet-latest';
-      }
-    } else if (classification.complexity === 'simple') {
-      if (classification.type === 'conversational') {
-        return 'claude-3-7-sonnet-latest';
-      } else {
-        return 'gpt-4.1';
-      }
-    }
-    
-    // Get the model for this intent, or default to gpt-4.1
-    const selectedModel = intentModelMap[classification.type] ?? 'gpt-4.1';
-    
-    // Check if selected model is available
-    if (this.isModelAvailable(selectedModel)) {
-      return selectedModel;
-    } else {
-      // Fall back to any suitable model
-      return suitableModels[0]?.id || 'gpt-4.1';
-    }
-  }
-
-  /**
-   * Generate a cache key for the prompt and parameters
-   * @param prompt The user prompt
-   * @param modelId The model ID
-   * @param maxTokens Maximum tokens to generate
-   * @param temperature Sampling temperature
-   * @returns The cache key
-   */
-  private generateCacheKey(
-    prompt: string,
-    modelId?: string,
-    maxTokens = 1024,
-    temperature = 0.7
-  ): string {
-    // Create a hash of the prompt
-    const hash = crypto
-      .createHash('sha256')
-      .update(prompt)
-      .digest('hex')
-      .substring(0, 16);
-    
-    // Add model ID, max tokens, and temperature to the key
-    const modelPart = modelId ?? 'default';
-    
-    // Simple cache key generation
-    return `${modelPart}:${maxTokens}:${temperature}:${hash}`;
-  }
-
-  /**
-   * Check if a response is cached
-   * @param cacheKey The cache key
-   * @returns The cached response or null
-   */
-  private async checkCache(cacheKey: string) {
-    try {
-      const cached = await this.fastify.redis.get(cacheKey);
-      return cached ? JSON.parse(cached) as RouterResponse : null;
-    } catch (error) {
-      this.fastify.log.error(error, 'Cache check failed');
-      return null;
-    }
-  }
-
-  /**
-   * Cache a response
-   * @param cacheKey The cache key
-   * @param response The response to cache
-   */
-  private async cacheResponse(cacheKey: string, response: RouterResponse) {
-    try {
-      // Cache for 1 hour
-      await this.fastify.redis.set(
-        cacheKey,
-        JSON.stringify(response),
-        'EX',
-        60 * 60
-      );
-    } catch (error) {
-      this.fastify.log.error(error, 'Cache set failed');
-    }
-  }
-
-  /**
-   * Send a prompt to a specific model
-   * @param modelId The model ID
-   * @param prompt The user prompt
-   * @param maxTokens Maximum tokens to generate
-   * @param temperature Sampling temperature
-   * @returns The model response
-   */
-  /**
-   * Send a prompt to a model with timeout handling
-   * @param modelId Model ID
-   * @param prompt User prompt
-   * @param maxTokens Maximum tokens
-   * @param temperature Temperature
-   * @param timeoutMs Optional timeout in milliseconds
-   * @returns Router response
-   */
-  private async sendToModel(
-    modelId: string,
-    prompt: string,
-    maxTokens: number,
-    temperature: number,
-    _timeoutMs?: number // Used in executeFallbackStrategy
-  ): Promise<RouterResponse> {
-    // Start a trace for this model call
-    const traceId = startTrace('model_call', undefined, {
-      modelId,
-      promptLength: prompt.length,
-      maxTokens,
-      temperature
-    });
-    
-    const startTime = performance.now();
-    
-    try {
-      // Get the appropriate adapter for this model
-      const adapter = getModelAdapter(this.fastify, modelId);
-      
-      // Prepare request options
-      const options: ModelRequestOptions = {
-        maxTokens,
-        temperature
-      };
-      
-      // Generate completion using the adapter
-      const modelResponse = await adapter.generateCompletion(prompt, options);
-      
-      // Calculate response time
-      const responseTime = performance.now() - startTime;
-      
-      // Track model usage metrics
-      trackModelUsage(modelId, modelResponse.tokens.total, responseTime);
-      
-      // Update model latency tracking
-      this.updateModelLatency(modelId, responseTime);
-      
-      // End the trace
-      endTrace(traceId, {
-        promptTokens: modelResponse.tokens.prompt,
-        completionTokens: modelResponse.tokens.completion,
-        totalTokens: modelResponse.tokens.total,
-        responseTime,
-        success: true
-      });
-      
-      // Log the model call with correlation ID
-      this.fastify.log.info({
-        modelId,
-        promptTokens: modelResponse.tokens.prompt,
-        completionTokens: modelResponse.tokens.completion,
-        totalTokens: modelResponse.tokens.total,
-        responseTime: Math.round(responseTime),
-        maxTokens,
-        temperature,
-      }, 'Model call completed');
-      
-      // Create and return the response
-      const response: RouterResponse = {
-        response: modelResponse.text,
-        model_used: modelId,
-        tokens: {
-          prompt: modelResponse.tokens.prompt,
-          completion: modelResponse.tokens.completion,
-          total: modelResponse.tokens.total,
-        },
-        classification: {
-          intent: 'unknown',
-          confidence: 0.5,
-        },
-        processing_time: responseTime / 1000, // Convert to seconds
-      };
-      
-      return response;
-    } catch (error) {
-      // End the trace with error
-      endTrace(traceId, {
-        error: error instanceof Error ? error.message : String(error),
-        success: false
-      });
-      
-      // Log the error
-      this.fastify.log.error({
-        error,
-        modelId,
-        promptLength: prompt.length,
-      }, 'Model call failed');
-      
-      // Rethrow with additional context
-      throw new Error(`Failed to call model ${modelId}: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    return routerResponse;
   }
 
   /**
@@ -1079,137 +972,148 @@ export class RouterService {
     // Determine fallback levels
     const fallbackLevels = options.fallbackLevels ?? this.defaultOptions.fallbackLevels ?? 2;
     
-    // Get fallback models in priority order
-    const fallbackModels = this.getFallbackModelsInOrder(primaryModel, classification);
+    // Get available models, excluding the primary model
+    const availableModels = Object.keys(this.models).filter(
+      modelId => modelId !== primaryModel && this.isModelAvailable(modelId)
+    );
     
-    // Track fallback attempts for monitoring
-    if (options.monitorFallbacks ?? this.defaultOptions.monitorFallbacks) {
-      const currentAttempts = this.fallbackAttempts.get(primaryModel) ?? 0;
-      this.fallbackAttempts.set(primaryModel, currentAttempts + 1);
-      
-      // Alert if fallbacks are happening too frequently
-      if (currentAttempts >= 5 && !this.fallbackAlerts.has(primaryModel)) {
-        this.fastify.log.warn({
-          modelId: primaryModel,
-          fallbackCount: currentAttempts
-        }, 'Frequent fallbacks detected for model');
-        
-        this.fallbackAlerts.add(primaryModel);
-      }
-    }
+    // Sort available models by priority (higher priority first)
+    availableModels.sort((a, b) => (this.models[b].priority ?? 0) - (this.models[a].priority ?? 0));
     
-    // Try each fallback model in order, up to the fallback level limit
+    this.fastify.log.warn({
+      primaryModel,
+      availableModels,
+      fallbackLevels,
+      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : '')
+    }, 'Executing fallback strategy');
+
     let lastError: Error | undefined;
-    
-    for (let i = 0; i < Math.min(fallbackModels.length, fallbackLevels); i++) {
-      const fallbackModel = fallbackModels[i];
+
+    for (let i = 0; i < fallbackLevels && i < availableModels.length; i++) {
+      const fallbackModel = availableModels[i];
       
       try {
-        this.fastify.log.warn({
-          originalModel: primaryModel,
+        this.fastify.log.info({
+          primaryModel,
           fallbackModel,
-          fallbackLevel: i + 1,
-          maxLevels: fallbackLevels,
-          reason: lastError ? `Previous error: ${lastError.message}` : 'Model unavailable'
-        }, 'Using fallback model');
+          attempt: i + 1,
+          totalAttempts: fallbackLevels
+        }, 'Attempting fallback to model');
         
-        // Send to fallback model with timeout from options
-        const response = await this.sendToModel(
+        // Send to fallback model
+        const response = await this.sendToModel(fallbackModel, prompt, maxTokens, temperature);
+        
+        // If successful, return the response
+        this.fastify.log.info({
+          primaryModel,
           fallbackModel,
-          prompt,
-          maxTokens,
-          temperature,
-          options.timeoutMs
-        );
+          attempt: i + 1
+        }, 'Fallback successful');
         
-        // Return successful result
-        return {
-          success: true,
-          response
-        };
+        // Track successful fallback
+        this.trackFallback(primaryModel, fallbackModel);
+        
+        return { success: true, response };
       } catch (error) {
-        // Store error for next iteration
+        this.fastify.log.error({
+          primaryModel,
+          fallbackModel,
+          attempt: i + 1,
+          error
+        }, 'Fallback attempt failed');
         lastError = error instanceof Error ? error : new Error(String(error));
         
-        this.fastify.log.error({
-          fallbackModel,
-          fallbackLevel: i + 1,
-          error: lastError.message
-        }, 'Fallback model failed');
+        // Track failed fallback
+        this.trackFallback(primaryModel, fallbackModel, true);
       }
     }
     
-    // All fallbacks failed
-    return {
-      success: false,
-      error: lastError ?? new Error('All fallback models failed')
-    };
+    // If all fallbacks failed
+    this.fastify.log.error({
+      primaryModel,
+      fallbackLevels,
+      lastError: lastError?.message
+    }, 'All fallback attempts failed');
+
+    return { success: false, error: lastError };
   }
   
   /**
-   * Get fallback models in priority order
-   * @param primaryModel Primary model ID
-   * @param classification Prompt classification
-   * @returns Array of fallback model IDs in priority order
+   * Track fallback events and trigger alerts if necessary
+   * @param primaryModel Primary model that failed
+   * @param fallbackModel Fallback model used
+   * @param failed Whether the fallback also failed
    */
-  private getFallbackModelsInOrder(primaryModel: string, classification: ClassifiedIntent): string[] {
-    // Get all available models except the primary
-    const availableModels = Object.values(this.models).filter(model =>
-      model.id !== primaryModel && this.isModelAvailable(model.id)
-    );
-    
-    if (availableModels.length === 0) {
-      return [];
+  private trackFallback(primaryModel: string, fallbackModel: string, failed = false): void {
+    if (!this.defaultOptions.monitorFallbacks) {
+      return;
     }
     
-    // First priority: same provider models
-    const primaryModelInfo = this.models[primaryModel];
-    const sameProviderModels = availableModels.filter(model =>
-      model.provider === primaryModelInfo?.provider
-    );
+    const key = `${primaryModel}->${fallbackModel}`;
+    const currentAttempts = (this.fallbackAttempts.get(key) ?? 0) + 1;
+    this.fallbackAttempts.set(key, currentAttempts);
     
-    // Second priority: models with similar capabilities
-    const similarCapabilityModels = availableModels.filter(model =>
-      primaryModelInfo?.capabilities.every(capability =>
-        model.capabilities.includes(capability)
-      )
-    );
+    // Define alert threshold (e.g., 3 fallbacks in an hour)
+    const alertThreshold = 3;
     
-    // Third priority: models that match the classification requirements
-    const classificationModels = availableModels.filter(model =>
-      classification.features.every(feature =>
-        model.capabilities.includes(feature)
-      )
-    );
+    if (currentAttempts >= alertThreshold && !this.fallbackAlerts.has(key)) {
+      this.fastify.log.warn({
+        primaryModel,
+        fallbackModel,
+        attempts: currentAttempts
+      }, 'Repeated fallback detected. Consider investigating primary model.');
+      
+      // Mark as alerted to avoid repeated alerts for the same pair
+      this.fallbackAlerts.add(key);
+    }
     
-    // Fourth priority: any available model sorted by quality
-    const sortedByQuality = [...availableModels].sort((a, b) => b.quality - a.quality);
-    
-    // Combine all priorities, removing duplicates
-    const allModels: string[] = [];
-    
-    // Add models in priority order, avoiding duplicates
-    const addModelsNoDuplicates = (models: ModelInfo[]) => {
-      for (const model of models) {
-        if (!allModels.includes(model.id)) {
-          allModels.push(model.id);
+    if (failed) {
+      const failedKey = `${key}-failed`;
+      const currentFailedAttempts = (this.fallbackAttempts.get(failedKey) ?? 0) + 1;
+      this.fallbackAttempts.set(failedKey, currentFailedAttempts);
+      
+      // Define failed alert threshold (e.g., 2 consecutive failed fallbacks)
+      const failedAlertThreshold = 2;
+      
+      if (currentFailedAttempts >= failedAlertThreshold && !this.fallbackAlerts.has(failedKey)) {
+        this.fastify.log.error({
+          primaryModel,
+          fallbackModel,
+          failedAttempts: currentFailedAttempts
+        }, 'Repeated failed fallback detected. Consider degraded mode or manual intervention.');
+        
+        // Mark as alerted
+        this.fallbackAlerts.add(failedKey);
+        
+        // Consider enabling degraded mode automatically if configured
+        if (this.fastify.config.AUTO_DEGRADED_MODE === 'true') {
+          this.enableDegradedMode();
         }
       }
-    };
-    
-    addModelsNoDuplicates(sameProviderModels);
-    addModelsNoDuplicates(similarCapabilityModels);
-    addModelsNoDuplicates(classificationModels);
-    addModelsNoDuplicates(sortedByQuality);
-    
-    return allModels;
+    } else {
+      // Reset failed attempts for this pair on success
+      const failedKey = `${key}-failed`;
+      this.fallbackAttempts.delete(failedKey);
+      this.fallbackAlerts.delete(failedKey);
+    }
   }
   
   /**
+   * Enable degraded operation mode
+   */
+  private enableDegradedMode(): void {
+    if (!this.degradedModeEnabled) {
+      this.degradedModeEnabled = true;
+      this.fastify.log.warn('Degraded operation mode enabled due to repeated failed fallbacks.');
+      // Potentially send an alert (e.g., email, Slack)
+    }
+  }
+
+  /**
    * Create a degraded response when all models fail
-   * @param prompt Original prompt
+   * @param prompt User prompt
    * @param classification Prompt classification
-   * @param error Error that occurred
+   * @param error The error that caused the failure
    * @returns Degraded response
    */
   private createDegradedResponse(
@@ -1217,37 +1121,192 @@ export class RouterService {
     classification: ClassifiedIntent,
     error?: Error
   ): RouterResponse {
-    // Try to get a cached response for similar prompts
-    const degradedResponse: RouterResponse = {
-      response: 'The service is currently experiencing issues. Please try again later.',
-      model_used: 'degraded_mode',
+    this.fastify.log.warn({
+      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+      classification,
+      error: error?.message
+    }, 'Creating degraded response');
+
+    const degradedText = `I am currently experiencing technical difficulties and cannot process your request fully. Please try again later. (Error: ${error?.message ?? 'Unknown error'})`;
+
+    return {
+      response: degradedText,
+      model_used: 'degraded-mode',
       tokens: {
         prompt: classification.tokens.estimated,
-        completion: 20,
-        total: classification.tokens.estimated + 20
+        completion: Math.ceil(degradedText.length / 4),
+        total: classification.tokens.estimated + Math.ceil(degradedText.length / 4)
       },
+      cached: false,
       classification: {
-        intent: classification.type,
-        confidence: classification.confidence,
-        features: classification.features,
-        domain: classification.domain
+        intent: 'degraded',
+        confidence: 1.0,
+        features: [],
+        domain: 'system'
       },
-      processing_time: 0.1,
-      cached: false
+      processing_time: 0,
+      cost: 0,
+      model_chain: ['degraded-mode']
     };
-    
-    // Add error details if available
-    if (error) {
-      degradedResponse.response += ` (Error: ${error.message})`;
+  }
+
+  /**
+   * Select the best model based on classification and routing options
+   * @param classification Prompt classification
+   * @param options Routing options
+   * @returns The ID of the selected model
+   */
+  private selectModel(classification: ClassifiedIntent, options: RoutingOptions): string {
+    // Filter available models based on capabilities
+    const capableModels = Object.values(this.models).filter(model =>
+      model.available && classification.features.every(feature => model.capabilities.includes(feature))
+    );
+
+    if (capableModels.length === 0) {
+      this.fastify.log.error({
+        classification,
+        options
+      }, 'No capable models found for classification');
+      throw errors.router.noCapableModels('No models found that can handle the required capabilities', { classification });
     }
+
+    // Sort models based on routing options
+    capableModels.sort((a, b) => {
+      if (options.qualityOptimize) {
+        // Prioritize quality, then priority, then cost
+        if (b.quality !== a.quality) return b.quality - a.quality;
+        if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0);
+        return a.cost - b.cost;
+      } else if (options.costOptimize) {
+        // Prioritize cost, then priority, then quality
+        if (a.cost !== b.cost) return a.cost - b.cost;
+        if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0);
+        return b.quality - a.quality;
+      } else if (options.latencyOptimize) {
+        // Prioritize latency, then priority, then quality
+        if (a.latency !== b.latency) return a.latency - b.latency;
+        if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0);
+        return b.quality - a.quality;
+      } else {
+        // Default: prioritize priority, then quality, then cost
+        if ((b.priority ?? 0) !== (a.priority ?? 0)) return (b.priority ?? 0) - (a.priority ?? 0);
+        if (b.quality !== a.quality) return b.quality - a.quality;
+        return a.cost - b.cost;
+      }
+    });
+
+    // Return the ID of the top model
+    const selectedModelId = capableModels[0].id;
+    this.fastify.log.debug({
+      classification,
+      options,
+      capableModels: capableModels.map(m => ({ id: m.id, quality: m.quality, cost: m.cost, latency: m.latency, priority: m.priority })),
+      selectedModel: selectedModelId
+    }, 'Model selection complete');
+
+    return selectedModelId;
+  }
+
+  /**
+   * Send the prompt to the selected model adapter
+   * @param modelId Model ID
+   * @param prompt User prompt
+   * @param maxTokens Maximum tokens
+   * @param temperature Temperature
+   * @returns Model response
+   */
+  private async sendToModel(
+    modelId: string,
+    prompt: string,
+    maxTokens: number,
+    temperature: number
+  ): Promise<RouterResponse> {
+    const startTime = Date.now();
     
-    this.fastify.log.error({
-      mode: 'degraded',
-      prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
-      error: error?.message
-    }, 'Serving degraded response');
-    
-    return degradedResponse;
+    try {
+      // Get the appropriate adapter for this model
+      const adapter = getModelAdapter(this.fastify, modelId);
+      
+      // Prepare request options
+      const options: ModelRequestOptions = {
+        maxTokens,
+        temperature,
+        messages: [{ role: 'user', content: prompt }], // Pass the prompt as a message
+      };
+      
+      // Generate completion using the adapter
+      const modelResponse = await adapter.generateCompletion(prompt, options);
+      
+      // Update model latency
+      this.updateModelLatency(modelId, Date.now() - startTime);
+      
+      // Track model usage
+      void trackModelUsage(modelId, modelResponse.tokens.total, modelResponse.processingTime ?? 0);
+      
+      return {
+        response: modelResponse.text,
+        model_used: modelResponse.model,
+        tokens: modelResponse.tokens,
+        cached: false,
+        functionCall: modelResponse.functionCall,
+        toolCalls: modelResponse.toolCalls,
+        messages: modelResponse.messages
+      };
+    } catch (error) {
+      // Update model latency on failure (can indicate high latency or timeout)
+      this.updateModelLatency(modelId, Date.now() - startTime);
+      
+      this.fastify.log.error({
+        modelId,
+        prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
+        error
+      }, 'Failed to send prompt to model');
+      
+      // Mark model as unavailable if it consistently fails
+      // This could be implemented with a more sophisticated failure tracking mechanism
+      this.modelAvailability.set(modelId, false);
+      if (this.models[modelId]) {
+        this.models[modelId].available = false;
+      }
+      
+      throw errors.router.modelRequestFailed(`Model ${modelId} failed to process the request`, { modelId, error });
+    }
+  }
+
+  /**
+   * Generate a unique cache key for a prompt and options
+   * @param prompt The user prompt
+   * @param modelId Optional specific model ID
+   * @param maxTokens Maximum tokens
+   * @param temperature Temperature
+   * @param tools Optional tools JSON string
+   * @param toolChoice Optional tool choice JSON string
+   * @returns Cache key
+   */
+  private generateCacheKey(
+    prompt: string,
+    modelId?: string,
+    maxTokens?: number,
+    temperature?: number,
+    tools?: string,
+    toolChoice?: string
+  ): string {
+    const keyData = `${prompt}-${modelId ?? 'auto'}-${maxTokens ?? 'default'}-${temperature ?? 'default'}-${tools ?? 'none'}-${toolChoice ?? 'none'}`;
+    return crypto.createHash('sha256').update(keyData).digest('hex');
+  }
+
+  /**
+   * Determine the cache TTL based on classification
+   * @param classification Prompt classification
+   * @param defaultTTL Default TTL in seconds
+   * @returns Cache TTL in seconds
+   */
+  private determineCacheTTL(classification: ClassifiedIntent, defaultTTL: number): number {
+    // Adjust TTL based on prompt type or complexity
+    if (classification.complexity === 'simple') {
+      return defaultTTL / 2; // Cache simple prompts shorter
+    }
+    return defaultTTL;
   }
 }
 
@@ -1255,5 +1314,3 @@ export class RouterService {
 export function createRouterService(fastify: FastifyInstance) {
   return new RouterService(fastify);
 }
-
-export default createRouterService;

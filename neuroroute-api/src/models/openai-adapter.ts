@@ -1,8 +1,21 @@
 
 import { FastifyInstance } from 'fastify';
 import axios from 'axios';
-import { BaseModelAdapter, ModelResponse, ModelRequestOptions, StreamingChunk, RawProviderResponse, ModelDetails } from './base-adapter.js';
-import { errors, isRetryableError, classifyExternalError, ErrorType } from '../utils/error-handler.js';
+import {
+  BaseModelAdapter,
+  ModelResponse,
+  ModelRequestOptions,
+  StreamingChunk,
+  RawProviderResponse,
+  ModelDetails,
+  ChatMessage,
+  AssistantMessage,
+  FunctionCall,
+  ToolCall,
+  FunctionDefinition,
+  ToolDefinition
+} from './base-adapter.js';
+import { errors, isRetryableError, classifyExternalError } from '../utils/error-handler.js';
 
 // OpenAI API response interface as RawProviderResponse
 interface OpenAIResponse extends RawProviderResponse {
@@ -14,7 +27,9 @@ interface OpenAIResponse extends RawProviderResponse {
     text?: string;
     message?: {
       role: string;
-      content: string;
+      content: string | null;
+      function_call?: FunctionCall;
+      tool_calls?: ToolCall[];
     };
     index: number;
     finish_reason: string;
@@ -24,6 +39,19 @@ interface OpenAIResponse extends RawProviderResponse {
     completion_tokens: number;
     total_tokens: number;
   };
+}
+
+// OpenAI-specific request options
+export interface OpenAIRequestOptions extends ModelRequestOptions {
+  // Existing options inherited from ModelRequestOptions
+  
+  // New options
+  messages?: ChatMessage[]; // Full message history
+  systemMessage?: string;   // Shorthand for system message
+  functions?: FunctionDefinition[];
+  functionCall?: 'auto' | 'none' | { name: string };
+  tools?: ToolDefinition[];
+  toolChoice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
 }
 
 // Type for external API errors that can be classified
@@ -144,7 +172,7 @@ export class OpenAIAdapter extends BaseModelAdapter {
    */
   async generateCompletion(
     prompt: string,
-    options?: ModelRequestOptions
+    options?: OpenAIRequestOptions
   ): Promise<ModelResponse> {
     const startTime = Date.now();
     this.logRequest(prompt, options);
@@ -196,9 +224,35 @@ export class OpenAIAdapter extends BaseModelAdapter {
           modelName = 'gpt-4.1';
         }
         
-        const requestOptions = {
+        // Handle different message formats
+        let messages: ChatMessage[];
+        
+        if (options?.messages && options.messages.length > 0) {
+          // Use provided messages if available
+          messages = options.messages;
+        } else {
+          // Build messages from prompt and optional system message
+          messages = [];
+          
+          // Add system message if provided
+          if (options?.systemMessage) {
+            messages.push({
+              role: 'system',
+              content: options.systemMessage
+            });
+          }
+          
+          // Add user message from prompt
+          messages.push({
+            role: 'user',
+            content: prompt
+          });
+        }
+        
+        // Prepare request options
+        const requestOptions: Record<string, any> = {
           model: modelName,
-          messages: [{ role: 'user', content: prompt }],
+          messages: messages,
           max_tokens: options?.maxTokens ?? 1024,
           temperature: options?.temperature ?? 0.7,
           top_p: options?.topP ?? 1,
@@ -207,6 +261,24 @@ export class OpenAIAdapter extends BaseModelAdapter {
           stop: options?.stop,
           stream: false
         };
+        
+        // Add function calling options if provided
+        if (options?.functions && options.functions.length > 0) {
+          requestOptions.functions = options.functions;
+          
+          if (options.functionCall) {
+            requestOptions.function_call = options.functionCall;
+          }
+        }
+        
+        // Add tool options if provided
+        if (options?.tools && options.tools.length > 0) {
+          requestOptions.tools = options.tools;
+          
+          if (options.toolChoice) {
+            requestOptions.tool_choice = options.toolChoice;
+          }
+        }
 
         // Make request to OpenAI API with timeout
         const response = await axios.post<OpenAIResponse>(
@@ -229,6 +301,10 @@ export class OpenAIAdapter extends BaseModelAdapter {
         // Extract response text
         const responseText = response.data.choices[0]?.message?.content ?? '';
         
+        // Extract function call or tool calls if present
+        const functionCall = response.data.choices[0]?.message?.function_call;
+        const toolCalls = response.data.choices[0]?.message?.tool_calls;
+        
         // Create model response
         const modelResponse: ModelResponse = {
           text: responseText,
@@ -240,6 +316,19 @@ export class OpenAIAdapter extends BaseModelAdapter {
           model: modelName, // Use the actual model name sent to the API
           processingTime: (Date.now() - startTime) / 1000,
           raw: response.data,
+          // Add function/tool call results if present
+          functionCall: functionCall,
+          toolCalls: toolCalls,
+          // Add full conversation history
+          messages: [
+            ...messages,
+            {
+              role: 'assistant',
+              content: responseText,
+              ...(functionCall ? { function_call: functionCall } : {}),
+              ...(toolCalls ? { tool_calls: toolCalls } : {})
+            } as AssistantMessage
+          ]
         };
 
         this.logResponse(modelResponse);
@@ -453,7 +542,7 @@ export class OpenAIAdapter extends BaseModelAdapter {
    */
   async *generateCompletionStream(
     prompt: string,
-    options?: ModelRequestOptions
+    options?: OpenAIRequestOptions
   ): AsyncGenerator<StreamingChunk, void, unknown> {
     this.logRequest(prompt, { ...options, stream: true });
 
@@ -509,9 +598,35 @@ export class OpenAIAdapter extends BaseModelAdapter {
           modelName = 'gpt-4.1';
         }
         
-        const requestOptions = {
+        // Handle different message formats
+        let messages: ChatMessage[];
+        
+        if (options?.messages && options.messages.length > 0) {
+          // Use provided messages if available
+          messages = options.messages;
+        } else {
+          // Build messages from prompt and optional system message
+          messages = [];
+          
+          // Add system message if provided
+          if (options?.systemMessage) {
+            messages.push({
+              role: 'system',
+              content: options.systemMessage
+            });
+          }
+          
+          // Add user message from prompt
+          messages.push({
+            role: 'user',
+            content: prompt
+          });
+        }
+        
+        // Prepare request options
+        const requestOptions: Record<string, any> = {
           model: modelName,
-          messages: [{ role: 'user', content: prompt }],
+          messages: messages,
           max_tokens: options?.maxTokens ?? 1024,
           temperature: options?.temperature ?? 0.7,
           top_p: options?.topP ?? 1,
@@ -520,6 +635,24 @@ export class OpenAIAdapter extends BaseModelAdapter {
           stop: options?.stop,
           stream: true
         };
+        
+        // Add function calling options if provided
+        if (options?.functions && options.functions.length > 0) {
+          requestOptions.functions = options.functions;
+          
+          if (options.functionCall) {
+            requestOptions.function_call = options.functionCall;
+          }
+        }
+        
+        // Add tool options if provided
+        if (options?.tools && options.tools.length > 0) {
+          requestOptions.tools = options.tools;
+          
+          if (options.toolChoice) {
+            requestOptions.tool_choice = options.toolChoice;
+          }
+        }
 
         // Make request to OpenAI API with timeout
         const response = await axios.post(
@@ -566,25 +699,70 @@ export class OpenAIAdapter extends BaseModelAdapter {
             try {
               const data = JSON.parse(line.replace(/^data: /, '')) as {
                 choices?: {
-                  delta?: { content?: string };
+                  delta?: {
+                    content?: string;
+                    function_call?: { name?: string; arguments?: string };
+                    tool_calls?: { index: number; id?: string; type?: string; function?: { name?: string; arguments?: string } }[];
+                  };
                   finish_reason?: string;
                 }[];
               };
               
               if (data.choices && data.choices.length > 0) {
                 const choice = data.choices[0];
-                const content = choice.delta?.content ?? '';
+                const delta = choice.delta || {};
                 finishReason = choice.finish_reason;
-
-                const streamingChunk: StreamingChunk = {
-                  chunk: content,
-                  done: !!finishReason,
-                  model: modelName, // Use the actual model name sent to the API
-                  finishReason
-                };
-
-                this.logStreamingChunk(streamingChunk);
-                yield streamingChunk;
+                
+                // Handle different types of content in the delta
+                if (delta.content) {
+                  // Regular text content
+                  const streamingChunk: StreamingChunk = {
+                    chunk: delta.content,
+                    done: !!finishReason,
+                    model: modelName,
+                    finishReason
+                  };
+                  
+                  this.logStreamingChunk(streamingChunk);
+                  yield streamingChunk;
+                } else if (delta.function_call) {
+                  // Function call - serialize to JSON for streaming
+                  const functionCallChunk = JSON.stringify(delta.function_call);
+                  
+                  const streamingChunk: StreamingChunk = {
+                    chunk: `[Function Call]: ${functionCallChunk}`,
+                    done: !!finishReason,
+                    model: modelName,
+                    finishReason
+                  };
+                  
+                  this.logStreamingChunk(streamingChunk);
+                  yield streamingChunk;
+                } else if (delta.tool_calls) {
+                  // Tool calls - serialize to JSON for streaming
+                  const toolCallsChunk = JSON.stringify(delta.tool_calls);
+                  
+                  const streamingChunk: StreamingChunk = {
+                    chunk: `[Tool Call]: ${toolCallsChunk}`,
+                    done: !!finishReason,
+                    model: modelName,
+                    finishReason
+                  };
+                  
+                  this.logStreamingChunk(streamingChunk);
+                  yield streamingChunk;
+                } else if (finishReason) {
+                  // Just a finish reason with no content
+                  const streamingChunk: StreamingChunk = {
+                    chunk: '',
+                    done: true,
+                    model: modelName,
+                    finishReason
+                  };
+                  
+                  this.logStreamingChunk(streamingChunk);
+                  yield streamingChunk;
+                }
               }
             } catch (error) {
               // Skip invalid JSON
