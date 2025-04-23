@@ -1,62 +1,85 @@
 # NeuroRoute
 
-NeuroRoute is an intelligent routing layer that receives prompts and intelligently forwards them to the best-suited LLM backend based on intent, complexity, and required features. The goal is to optimize for cost, speed, and capability, while keeping the system modular and easy to extend.
+NeuroRoute is an intelligent routing layer built with Node.js and Fastify. It receives prompts and intelligently forwards them to the best-suited LLM backend based on intent, complexity, and required features. The goal is to optimize for cost, speed, and capability, while keeping the system modular and easy to extend.
 
 ## Features
 
-- **Smart Routing**: Routes prompts to the most appropriate LLM backend
+- **Smart Routing**: Routes prompts to the most appropriate LLM backend.
 - **Multiple LLM Backends**:
   - Local LM Studio for simple queries
-  - OpenAI GPT-4 for code and analysis
-  - Anthropic Claude for long documents and detailed reasoning
-- **Redis Caching**: Optional caching of responses for improved performance
-- **Comprehensive Logging**: Detailed logging of prompts, responses, and metrics
-- **Modular Design**: Easy to extend with new models and classification strategies
-- **Secure API Key Storage**: Store API keys securely in a local database
+  - OpenAI GPT models
+  - Anthropic Claude models
+- **OpenAI-Compatible API**: Includes a `/chat/completions` endpoint compatible with the OpenAI API specification.
+- **Redis Caching**: Optional caching of responses for improved performance.
+- **PostgreSQL Database**: Uses PostgreSQL for storing API keys, configurations, and logs.
+- **Prisma ORM**: Integrates with Prisma for database management.
+- **Comprehensive Logging**: Detailed logging of prompts, responses, and metrics using Pino.
+- **Modular Design**: Easy to extend with new models and classification strategies.
+- **Secure API Key Management**: Store API keys securely in the database.
+- **Dynamic Configuration**: Manage model configurations and routing rules via API.
+- **Monitoring & Tracing**: Built-in support for performance metrics and request tracing.
 
 ## Installation
 
 ### Prerequisites
 
-- Python 3.11+
+- Node.js v18+
+- npm
+- PostgreSQL database
 - Redis (optional, for caching)
-- LM Studio (for local model access)
+- LM Studio (optional, for local model access)
 
 ### Setup
 
-1. Clone the repository
-   ```bash
-   git clone <repository-url>
-   cd neuroroute
-   ```
+1.  **Clone the repository**
+    ```bash
+    git clone <repository-url>
+    cd neuroroute
+    ```
 
-2. Install dependencies
-   ```bash
-   pip install -r requirements.txt
-   ```
+2.  **Install API dependencies**
+    ```bash
+    cd neuroroute-api
+    npm install
+    ```
 
-3. Configure environment variables
-   ```bash
-   # Copy the example .env file
-   cp .env.example .env
-   
-   # Edit the .env file with your API keys (optional, can also use API endpoints)
-   nano .env
-   ```
+3.  **Configure environment variables**
+    - Copy the example `.env` file in the `neuroroute-api` directory:
+      ```bash
+      cp .env.example .env
+      ```
+    - Edit the `.env` file with your database connection string, Redis URL (optional), and API keys (optional, can also use API endpoints):
+      ```bash
+      # Example .env content
+      DATABASE_URL="postgresql://user:password@host:port/database"
+      REDIS_URL="redis://localhost:6379"
+      OPENAI_API_KEY="sk-..."
+      ANTHROPIC_API_KEY="sk-ant-..."
+      LMSTUDIO_URL="http://localhost:1234/v1" # Default LM Studio URL
+      JWT_SECRET="your-secure-jwt-secret"
+      # ... other variables
+      ```
 
-4. Start LM Studio (for local model queries)
-   - Open LM Studio application
-   - Load your preferred local model (e.g., Mistral or LLaMA3)
-   - Enable the local HTTP server on port 1234
+4.  **Set up the database**
+    - Ensure your PostgreSQL server is running.
+    - Run Prisma migrations to create the database schema:
+      ```bash
+      npx prisma migrate dev
+      ```
 
-5. Start Redis (optional, for caching)
-   ```bash
-   # Option 1: Using Redis server directly
-   redis-server
-   
-   # Option 2: Using Docker Compose
-   docker-compose up -d redis
-   ```
+5.  **Start LM Studio (optional, for local model queries)**
+    - Open LM Studio application.
+    - Load your preferred local model (e.g., Mistral or LLaMA3).
+    - Enable the local HTTP server (usually on port 1234).
+
+6.  **Start Redis (optional, for caching)**
+    ```bash
+    # Option 1: Using Redis server directly
+    redis-server
+
+    # Option 2: Using Docker Compose (if available in project root)
+    # docker-compose up -d redis
+    ```
 
 ## Secure API Key Management
 
@@ -64,260 +87,151 @@ NeuroRoute provides two methods for managing API keys:
 
 ### 1. Database Storage (Recommended)
 
-API keys are stored securely in a local SQLite database:
+API keys are stored securely in the PostgreSQL database:
 
-- Keys are not exposed in environment variables or configuration files
-- Database files are automatically excluded from git
-- API endpoints allow for easy management of keys
+- Keys are not exposed in environment variables or configuration files.
+- API endpoints allow for easy management of keys.
 
 ### 2. Environment Variables
 
-For backward compatibility, API keys can still be provided via environment variables:
+For backward compatibility or simpler setups, API keys can still be provided via environment variables in the `.env` file:
 
-- The `.env` file is included in `.gitignore` to prevent accidental commits
-- Always use `.env.example` with placeholder values in version control
+- The `.env` file is included in `.gitignore` to prevent accidental commits.
+- Always use `.env.example` with placeholder values in version control.
 
 ### Best Practices
 
-1. **Never commit API keys to Git**
-2. **Rotate API keys regularly**
-3. **Use environment-specific keys**
-4. **Monitor API key usage**
-5. **Limit API key permissions**
+1.  **Never commit API keys to Git.**
+2.  **Rotate API keys regularly.**
+3.  **Use environment-specific keys.**
+4.  **Monitor API key usage.**
+5.  **Limit API key permissions.**
 
 ## Usage
 
 ### Starting the API
 
-```bash
-# Start the FastAPI server
-uvicorn main:app --reload
-```
+1.  **Build the project:**
+    ```bash
+    npm run build
+    ```
+2.  **Start the Fastify server:**
+    ```bash
+    npm start
+    ```
+    Alternatively, for development with auto-reloading:
+    ```bash
+    npm run dev
+    ```
 
-The API will be available at `http://localhost:8000`.
+The API will be available at `http://localhost:3000` (or the port specified in your `.env` file).
 
 ### API Endpoints
 
-#### Route a Prompt
+NeuroRoute provides several API endpoints:
 
-```http
-POST /prompt
-Content-Type: application/json
+#### `/chat/completions` (OpenAI Compatible)
 
-{
-  "prompt": "Write a function to calculate fibonacci numbers",
-  "metadata": {
-    "user_id": "user123",
-    "priority": "quality"
-  }
-}
-```
-
-Response:
-
-```json
-{
-  "model_used": "openai",
-  "response": "Here's a function to calculate Fibonacci numbers using recursion...",
-  "latency_ms": 1234,
-  "token_usage": {
-    "prompt_tokens": 12,
-    "completion_tokens": 156,
-    "total_tokens": 168
-  }
-}
-```
-
-#### List Available Models
-
-```http
-GET /models
-```
-
-Response:
-
-```json
-{
-  "models": {
-    "local": {
-      "name": "local-lmstudio",
-      "provider": "lmstudio",
-      "capabilities": ["basic", "chat", "simple_math", "file_creation"],
-      "max_tokens": 4096
-    },
-    "openai": {
-      "name": "gpt-4-turbo",
-      "provider": "openai",
-      "capabilities": ["analysis", "code", "summarization", "comparison", "complex_reasoning"],
-      "max_tokens": 128000
-    },
-    "anthropic": {
-      "name": "claude-3-sonnet",
-      "provider": "anthropic",
-      "capabilities": ["long_document", "legal", "detailed_reasoning", "analysis"],
-      "max_tokens": 200000
-    }
-  },
-  "count": 3
-}
-```
-
-#### API Key Management
-
-##### List All API Keys
-
-```http
-GET /api-keys/
-```
-
-Response:
-
-```json
-[
+- **Method**: `POST`
+- **Description**: Generate chat completions using an OpenAI-compatible interface. Supports streaming.
+- **Body**: Follows the [OpenAI Chat Completions API specification](https://platform.openai.com/docs/api-reference/chat/create).
+  ```json
   {
-    "provider": "openai",
-    "api_key": "sk-...",
-    "is_active": true,
-    "id": 1
-  },
-  {
-    "provider": "anthropic",
-    "api_key": "sk-ant-...",
-    "is_active": true,
-    "id": 2
+    "model": "gpt-4.1", // Or other model ID like 'claude-3-7-sonnet-latest', 'lmstudio-local'
+    "messages": [
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "Hello!"}
+    ],
+    "stream": false, // Set to true for streaming
+    "temperature": 0.7,
+    "max_tokens": 100
   }
-]
-```
+  ```
+- **Response (Non-streaming)**: OpenAI-compatible chat completion object.
+- **Response (Streaming)**: Server-Sent Events (SSE) stream with chunks in OpenAI format, ending with `data: [DONE]`.
 
-##### Get API Key for a Provider
+#### `/prompt` (Legacy)
 
-```http
-GET /api-keys/{provider}
-```
+- **Method**: `POST`
+- **Description**: Route a simple prompt to the best model based on internal logic.
+- **Body**:
+  ```json
+  {
+    "prompt": "Write a function to calculate fibonacci numbers",
+    "model": "optional-model-id", // Optional: Force a specific model
+    "max_tokens": 1024,
+    "temperature": 0.7
+  }
+  ```
+- **Response**:
+  ```json
+  {
+    "response": "...",
+    "model_used": "gpt-4.1",
+    "tokens": { "prompt": 10, "completion": 50, "total": 60 },
+    "processing_time": 1.234,
+    // ... other metadata
+  }
+  ```
 
-Response:
+#### `/models`
 
-```json
-{
-  "provider": "openai",
-  "api_key": "sk-...",
-  "is_active": true,
-  "id": 1
-}
-```
+- **Method**: `GET`
+- **Description**: List available models and their capabilities based on the dynamic configuration.
 
-##### Create or Update API Key
+#### `/admin/*`
 
-```http
-POST /api-keys/
-Content-Type: application/json
+- **Description**: Endpoints for managing API keys, model configurations, and viewing audit logs. Requires authentication. (See `neuroroute-api/docs/admin-api-guide.md` for details).
 
-{
-  "provider": "openai",
-  "api_key": "sk-...",
-  "is_active": true
-}
-```
+#### `/health`
 
-Response:
+- **Method**: `GET`
+- **Description**: Check the health status of the API.
 
-```json
-{
-  "provider": "openai",
-  "api_key": "sk-...",
-  "is_active": true,
-  "id": 1
-}
-```
+### API Documentation
 
-##### Update API Key
+Interactive API documentation (Swagger UI) is available at `/documentation` when running in development mode or if `ENABLE_SWAGGER` is set to `true`.
 
-```http
-PUT /api-keys/{provider}
-Content-Type: application/json
-
-{
-  "provider": "openai",
-  "api_key": "sk-...",
-  "is_active": true
-}
-```
-
-Response:
-
-```json
-{
-  "provider": "openai",
-  "api_key": "sk-...",
-  "is_active": true,
-  "id": 1
-}
-```
-
-##### Delete API Key
-
-```http
-DELETE /api-keys/{provider}
-```
-
-#### Health Check
-
-```http
-GET /health
-```
-
-## Project Structure
+## Project Structure (`neuroroute-api`)
 
 ```
-neuroroute/
-│
-├── main.py                  # FastAPI entrypoint
-├── router.py                # Core routing + model selection logic
-├── classifier.py            # Prompt classification logic
-├── cache.py                 # Redis wrapper
-├── config.py                # Model registry, API keys, etc.
-├── api_keys.py              # API key management endpoints
-│
-├── db/
-│   ├── __init__.py          # Database package initialization
-│   ├── database.py          # Database connection and session management
-│   ├── models.py            # SQLAlchemy models
-│   └── crud.py              # Database operations
-│
-├── models/
-│   ├── base_adapter.py      # Base adapter interface
-│   ├── openai_adapter.py    # OpenAI adapter
-│   ├── anthropic_adapter.py # Anthropic adapter
-│   └── local_lmstudio_adapter.py # Local LM Studio adapter
-│
-├── utils/
-│   └── logger.py            # Logging utilities
-│
-├── logs/                    # Log files
-├── db_data/                 # Database files
-├── requirements.txt         # Project dependencies
-└── README.md                # Project documentation
+neuroroute-api/
+├── dist/                  # Compiled JavaScript output
+├── prisma/                # Prisma schema and migrations
+├── scripts/               # Build and utility scripts
+├── src/
+│   ├── app.ts             # Fastify application setup
+│   ├── config.ts          # Configuration loading
+│   ├── models/            # LLM Adapter implementations (OpenAI, Anthropic, LMStudio)
+│   ├── plugins/           # Fastify plugins (Auth, CORS, Redis, Swagger, etc.)
+│   ├── routes/            # API route definitions (chat, prompt, admin, models, health)
+│   ├── schemas/           # Request/response validation schemas
+│   ├── services/          # Core services (Router, Cache, Classifier, Prisma, ConfigManager)
+│   ├── types/             # TypeScript type definitions
+│   └── utils/             # Utility functions (Logger, Error Handler, Translators)
+├── test/                  # Unit, integration, and performance tests
+├── .env.example           # Example environment variables
+├── Dockerfile             # Docker build definition
+├── eslint.config.js       # ESLint configuration
+├── jest.config.js         # Jest test configuration
+├── package.json           # Project dependencies and scripts
+├── README.md              # API-specific README
+└── tsconfig.json          # TypeScript configuration
 ```
 
 ## Classification Logic
 
-The current classification uses a simple rule-based approach:
-
-- **"create file", "basic math", "hello"** → Local LLM via LM Studio
-- **"analyze", "summarize", "code", "compare"** → OpenAI GPT-4
-- **"long document", "legal", "detailed reasoning"** → Claude Opus
-
-In the future, this can be replaced with a more sophisticated ML-based classifier or embedding model.
+The current classification uses a simple rule-based approach within `src/services/classifier.ts`. This can be extended or replaced with more sophisticated methods (e.g., ML models, embeddings) as needed.
 
 ## Future Enhancements
 
-- ML-based classification using embeddings
-- Support for multimodal inputs (images, audio)
-- More fine-grained model selection based on context
-- Additional LLM backends
-- Token budget management
-- Request rate limiting
-- User-specific model preferences
+- ML-based classification using embeddings.
+- Support for multimodal inputs.
+- More fine-grained model selection based on context and cost/latency/quality trade-offs.
+- Additional LLM backends.
+- Token budget management per request or user.
+- User-specific model preferences.
+- Enhanced monitoring dashboards.
 
 ## Contributing
 
