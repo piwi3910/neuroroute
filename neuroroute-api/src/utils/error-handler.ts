@@ -10,7 +10,7 @@ export const ErrorType = {
   FORBIDDEN: 'FORBIDDEN',
   NOT_FOUND: 'NOT_FOUND',
   CONFLICT: 'CONFLICT',
-  
+
   // Model-specific errors
   MODEL_UNAVAILABLE: 'MODEL_UNAVAILABLE',
   MODEL_TIMEOUT: 'MODEL_TIMEOUT',
@@ -20,23 +20,24 @@ export const ErrorType = {
   MODEL_CONTENT_FILTERED: 'MODEL_CONTENT_FILTERED',
   MODEL_INVALID_REQUEST: 'MODEL_INVALID_REQUEST',
   MODEL_CONTEXT_LENGTH: 'MODEL_CONTEXT_LENGTH',
-  
+
   // Network errors
   NETWORK_ERROR: 'NETWORK_ERROR',
   TIMEOUT: 'TIMEOUT',
-  
+
   // Database errors
   DB_ERROR: 'DB_ERROR',
   DB_CONNECTION: 'DB_CONNECTION',
   DB_QUERY: 'DB_QUERY',
-  
+
   // Cache errors
   CACHE_ERROR: 'CACHE_ERROR',
   CACHE_MISS: 'CACHE_MISS',
-  
+
   // Router errors
   ROUTER_NO_MODELS: 'ROUTER_NO_MODELS',
   ROUTER_ALL_MODELS_FAILED: 'ROUTER_ALL_MODELS_FAILED'
+  // Note: MODEL_UNAVAILABLE is used by router errors as well
 } as const;
 
 // Error severity levels as const object instead of enum
@@ -95,7 +96,7 @@ export class AppError extends Error {
 export class ModelError extends AppError {
   provider: string;
   modelId: string;
-  
+
   constructor(
     message: string,
     provider: string,
@@ -115,7 +116,7 @@ export class ModelError extends AppError {
 // Network error class
 export class NetworkError extends AppError {
   endpoint?: string;
-  
+
   constructor(
     message: string,
     endpoint?: string,
@@ -133,7 +134,7 @@ export class NetworkError extends AppError {
 // Database error class
 export class DatabaseError extends AppError {
   operation?: string;
-  
+
   constructor(
     message: string,
     operation?: string,
@@ -169,33 +170,33 @@ export function setupErrorHandler(fastify: FastifyInstance): void {
   // Set up error telemetry
   const errorCounts = new Map<string, number>();
   const errorRates = new Map<string, number[]>();
-  
+
   // Reset error rates every hour
   setInterval(() => {
     errorRates.clear();
   }, 60 * 60 * 1000);
-  
+
   // Handle errors in JSON format
   fastify.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
     // Get request ID if available
     const requestId = request.headers['x-request-id'] ?? request.id;
-    
+
     // Determine if this is a known application error
     const isAppError = error instanceof AppError;
-    
+
     // Generate correlation ID if not already present
     const correlationId = isAppError ? error.correlationId : uuidv4();
-    
+
     // Set status code
     const statusCode = isAppError ? error.statusCode : error.statusCode ?? 500;
-    
+
     // Determine error code
     const errorCode = isAppError ? error.code : error.code ?? ErrorType.INTERNAL;
-    
+
     // Track error for telemetry
     const currentCount = errorCounts.get(errorCode) ?? 0;
     errorCounts.set(errorCode, currentCount + 1);
-    
+
     // Track error rate (per minute)
     const now = Date.now();
     const minute = Math.floor(now / 60000);
@@ -203,10 +204,10 @@ export function setupErrorHandler(fastify: FastifyInstance): void {
     const rates = errorRates.get(rateKey) ?? [];
     rates.push(now);
     errorRates.set(rateKey, rates);
-    
+
     // Check if error rate is concerning (more than 10 per minute)
     const isHighErrorRate = rates.length > 10;
-    
+
     // Create error response
     const errorResponse: ErrorResponse = {
       error: {
@@ -218,25 +219,25 @@ export function setupErrorHandler(fastify: FastifyInstance): void {
       },
       requestId: requestId as string,
     };
-    
+
     // Add details for application errors
     if (isAppError && error.details) {
       errorResponse.error.details = error.details;
     }
-    
+
     // Determine log level based on error severity
     let logLevel = 'error';
     if (isAppError) {
       const appError = error;
       logLevel = appError.severity;
-      
+
       // Add source information to error details for internal tracking
       errorResponse.error.details ??= {};
-      
+
       if (appError.source) {
         errorResponse.error.details.source = appError.source;
       }
-      
+
       // For model errors, add provider and model information
       if (error instanceof ModelError) {
         const modelError = error;
@@ -244,7 +245,7 @@ export function setupErrorHandler(fastify: FastifyInstance): void {
         errorResponse.error.details.modelId = modelError.modelId;
       }
     }
-    
+
     // Log error with appropriate level and context
     const logContext = {
       err: error,
@@ -256,7 +257,7 @@ export function setupErrorHandler(fastify: FastifyInstance): void {
       highErrorRate: isHighErrorRate,
       errorCount: currentCount
     };
-    
+
     // Log with appropriate severity
     if (logLevel === 'fatal') {
       request.log.fatal(logContext, error.message);
@@ -269,7 +270,7 @@ export function setupErrorHandler(fastify: FastifyInstance): void {
     } else {
       request.log.debug(logContext, error.message);
     }
-    
+
     // Alert on high error rates
     if (isHighErrorRate) {
       fastify.log.warn({
@@ -278,7 +279,7 @@ export function setupErrorHandler(fastify: FastifyInstance): void {
         timeWindow: '1 minute'
       }, 'High error rate detected');
     }
-    
+
     // Send error response
     reply.status(statusCode).send(errorResponse);
   });
@@ -287,7 +288,7 @@ export function setupErrorHandler(fastify: FastifyInstance): void {
   fastify.setNotFoundHandler((request, reply) => {
     const requestId = request.headers['x-request-id'] ?? request.id;
     const correlationId = uuidv4();
-    
+
     const errorResponse: ErrorResponse = {
       error: {
         message: `Route ${request.method}:${request.url} not found`,
@@ -298,13 +299,13 @@ export function setupErrorHandler(fastify: FastifyInstance): void {
       },
       requestId: requestId as string,
     };
-    
+
     request.log.info({
       url: request.url,
       method: request.method,
       statusCode: 404,
     }, 'Route not found');
-    
+
     reply.status(404).send(errorResponse);
   });
 }
@@ -318,9 +319,9 @@ export const errors = {
    * @param details Additional details
    * @returns AppError instance
    */
-  badRequest: (message: string, code = ErrorType.BAD_REQUEST, details?: ErrorDetails) => 
+  badRequest: (message: string, code = ErrorType.BAD_REQUEST, details?: ErrorDetails) =>
     new AppError(message, 400, code, details, ErrorSeverity.WARN, false, 'api'),
-  
+
   /**
    * Create an unauthorized error
    * @param message Error message
@@ -328,9 +329,9 @@ export const errors = {
    * @param details Additional details
    * @returns AppError instance
    */
-  unauthorized: (message = 'Unauthorized', code = ErrorType.UNAUTHORIZED, details?: ErrorDetails) => 
+  unauthorized: (message = 'Unauthorized', code = ErrorType.UNAUTHORIZED, details?: ErrorDetails) =>
     new AppError(message, 401, code, details, ErrorSeverity.WARN, false, 'api'),
-  
+
   /**
    * Create a forbidden error
    * @param message Error message
@@ -338,9 +339,9 @@ export const errors = {
    * @param details Additional details
    * @returns AppError instance
    */
-  forbidden: (message = 'Forbidden', code = ErrorType.FORBIDDEN, details?: ErrorDetails) => 
+  forbidden: (message = 'Forbidden', code = ErrorType.FORBIDDEN, details?: ErrorDetails) =>
     new AppError(message, 403, code, details, ErrorSeverity.WARN, false, 'api'),
-  
+
   /**
    * Create a not found error
    * @param message Error message
@@ -348,9 +349,9 @@ export const errors = {
    * @param details Additional details
    * @returns AppError instance
    */
-  notFound: (message = 'Resource not found', code = ErrorType.NOT_FOUND, details?: ErrorDetails) => 
+  notFound: (message = 'Resource not found', code = ErrorType.NOT_FOUND, details?: ErrorDetails) =>
     new AppError(message, 404, code, details, ErrorSeverity.INFO, false, 'api'),
-  
+
   /**
    * Create a conflict error
    * @param message Error message
@@ -358,9 +359,9 @@ export const errors = {
    * @param details Additional details
    * @returns AppError instance
    */
-  conflict: (message: string, code = ErrorType.CONFLICT, details?: ErrorDetails) => 
+  conflict: (message: string, code = ErrorType.CONFLICT, details?: ErrorDetails) =>
     new AppError(message, 409, code, details, ErrorSeverity.WARN, false, 'api'),
-  
+
   /**
    * Create an internal server error
    * @param message Error message
@@ -368,9 +369,9 @@ export const errors = {
    * @param details Additional details
    * @returns AppError instance
    */
-  internal: (message = 'Internal server error', code = ErrorType.INTERNAL, details?: ErrorDetails) => 
+  internal: (message = 'Internal server error', code = ErrorType.INTERNAL, details?: ErrorDetails) =>
     new AppError(message, 500, code, details, ErrorSeverity.ERROR, false, 'api'),
-    
+
   /**
    * Create a model error
    * @param message Error message
@@ -384,29 +385,29 @@ export const errors = {
   model: {
     unavailable: (message: string, provider: string, modelId: string, details?: ErrorDetails, retryable = true) =>
       new ModelError(message, provider, modelId, ErrorType.MODEL_UNAVAILABLE, 503, details, ErrorSeverity.ERROR, retryable),
-      
+
     timeout: (message: string, provider: string, modelId: string, details?: ErrorDetails) =>
       new ModelError(message, provider, modelId, ErrorType.MODEL_TIMEOUT, 504, details, ErrorSeverity.ERROR, true),
-      
+
     rateLimited: (message: string, provider: string, modelId: string, details?: ErrorDetails) =>
       new ModelError(message, provider, modelId, ErrorType.MODEL_RATE_LIMITED, 429, details, ErrorSeverity.WARN, true),
-      
+
     authentication: (message: string, provider: string, modelId: string, details?: ErrorDetails) =>
       new ModelError(message, provider, modelId, ErrorType.MODEL_AUTHENTICATION, 401, details, ErrorSeverity.ERROR, false),
-      
+
     quotaExceeded: (message: string, provider: string, modelId: string, details?: ErrorDetails) =>
       new ModelError(message, provider, modelId, ErrorType.MODEL_QUOTA_EXCEEDED, 429, details, ErrorSeverity.ERROR, false),
-      
+
     contentFiltered: (message: string, provider: string, modelId: string, details?: ErrorDetails) =>
       new ModelError(message, provider, modelId, ErrorType.MODEL_CONTENT_FILTERED, 422, details, ErrorSeverity.WARN, false),
-      
+
     invalidRequest: (message: string, provider: string, modelId: string, details?: ErrorDetails) =>
       new ModelError(message, provider, modelId, ErrorType.MODEL_INVALID_REQUEST, 400, details, ErrorSeverity.WARN, false),
-      
+
     contextLength: (message: string, provider: string, modelId: string, details?: ErrorDetails) =>
       new ModelError(message, provider, modelId, ErrorType.MODEL_CONTEXT_LENGTH, 413, details, ErrorSeverity.WARN, false)
   },
-  
+
   /**
    * Create a network error
    * @param message Error message
@@ -417,11 +418,11 @@ export const errors = {
   network: {
     error: (message: string, endpoint?: string, details?: ErrorDetails) =>
       new NetworkError(message, endpoint, ErrorType.NETWORK_ERROR, 503, details, ErrorSeverity.ERROR, true),
-      
+
     timeout: (message: string, endpoint?: string, details?: ErrorDetails) =>
       new NetworkError(message, endpoint, ErrorType.TIMEOUT, 504, details, ErrorSeverity.ERROR, true)
   },
-  
+
   /**
    * Create a database error
    * @param message Error message
@@ -432,14 +433,14 @@ export const errors = {
   database: {
     error: (message: string, operation?: string, details?: ErrorDetails) =>
       new DatabaseError(message, operation, ErrorType.DB_ERROR, 500, details, ErrorSeverity.ERROR, false),
-      
+
     connection: (message: string, operation?: string, details?: ErrorDetails) =>
       new DatabaseError(message, operation, ErrorType.DB_CONNECTION, 503, details, ErrorSeverity.ERROR, true),
-      
+
     query: (message: string, operation?: string, details?: ErrorDetails) =>
       new DatabaseError(message, operation, ErrorType.DB_QUERY, 500, details, ErrorSeverity.ERROR, false)
   },
-  
+
   /**
    * Create a router error
    * @param message Error message
@@ -450,9 +451,18 @@ export const errors = {
   router: {
     noModels: (message = 'No models available', details?: ErrorDetails) =>
       new AppError(message, 503, ErrorType.ROUTER_NO_MODELS, details, ErrorSeverity.ERROR, false, 'router'),
-      
+
     allModelsFailed: (message = 'All models failed', details?: ErrorDetails) =>
       new AppError(message, 503, ErrorType.ROUTER_ALL_MODELS_FAILED, details, ErrorSeverity.ERROR, false, 'router'),
+
+    /**
+     * Create a model unavailable error
+     * @param message Error message
+     * @param details Additional details
+     * @returns AppError instance
+     */
+    modelUnavailable: (message: string, details?: ErrorDetails) =>
+      new AppError(message, 503, ErrorType.MODEL_UNAVAILABLE, details, ErrorSeverity.ERROR, true, 'router'),
 
     /**
      * Create a no capable models error
@@ -488,15 +498,15 @@ export function isRetryableError(error: Error): boolean {
   if (error instanceof AppError) {
     return error.retryable;
   }
-  
+
   // Network errors are generally retryable
-  if (error.message.includes('ECONNREFUSED') || 
-      error.message.includes('ETIMEDOUT') || 
+  if (error.message.includes('ECONNREFUSED') ||
+      error.message.includes('ETIMEDOUT') ||
       error.message.includes('ECONNRESET') ||
       error.message.includes('network error')) {
     return true;
   }
-  
+
   return false;
 }
 
@@ -520,7 +530,7 @@ export interface ExternalApiError {
 export function classifyExternalError(error: unknown, provider: string, modelId: string): ModelError {
   // Convert unknown error to ExternalApiError
   const apiError = error as ExternalApiError;
-  
+
   // Default to generic model error
   const errorMessage = apiError.message ?? 'Unknown error';
   const modelError = errors.model.unavailable(
@@ -529,100 +539,43 @@ export function classifyExternalError(error: unknown, provider: string, modelId:
     modelId,
     { originalError: apiError }
   );
-  
+
   // No response means network error
   if (!apiError.response) {
-    if (apiError.code === 'ECONNABORTED' || apiError.message?.includes('timeout')) {
-      return errors.model.timeout(`${provider} API timeout`, provider, modelId, { originalError: apiError });
+    if (errorMessage.includes('timeout')) {
+      return errors.model.timeout(`Request to ${provider} timed out`, provider, modelId, { originalError: apiError });
     }
-    return modelError;
+    return errors.model.unavailable(`Network error connecting to ${provider}`, provider, modelId, { originalError: apiError });
   }
-  
-  // Classify based on status code and error message
+
   const status = apiError.response.status;
-  const data = apiError.response.data ?? {};
-  const errorDetails = data.error?.message ?? errorMessage;
-  
+  const responseData = apiError.response.data;
+  const responseError = responseData?.error;
+
   switch (status) {
     case 401:
     case 403:
-      return errors.model.authentication(
-        `${provider} API authentication error: ${errorDetails}`,
-        provider,
-        modelId,
-        { originalError: apiError, responseData: data }
-      );
-      
+      return errors.model.authentication(`Authentication error with ${provider}: ${responseError?.message ?? errorMessage}`, provider, modelId, { originalError: apiError });
     case 429:
-      if (data.error?.type === 'insufficient_quota' || 
-          data.error?.message?.includes('quota') ||
-          data.error?.message?.includes('billing')) {
-        return errors.model.quotaExceeded(
-          `${provider} API quota exceeded: ${errorDetails}`,
-          provider,
-          modelId,
-          { originalError: apiError, responseData: data }
-        );
+      if (responseError?.type === 'insufficient_quota') {
+        return errors.model.quotaExceeded(`Quota exceeded for ${provider} model ${modelId}`, provider, modelId, { originalError: apiError });
       }
-      return errors.model.rateLimited(
-        `${provider} API rate limited: ${errorDetails}`,
-        provider,
-        modelId,
-        { 
-          originalError: apiError, 
-          responseData: data, 
-          retryAfter: apiError.response.headers ? apiError.response.headers['retry-after'] : undefined 
-        }
-      );
-      
+      return errors.model.rateLimited(`Rate limited by ${provider}`, provider, modelId, { originalError: apiError });
     case 400:
-      return errors.model.invalidRequest(
-        `${provider} API invalid request: ${errorDetails}`,
-        provider,
-        modelId,
-        { originalError: apiError, responseData: data }
-      );
-      
+      return errors.model.invalidRequest(`Invalid request to ${provider}: ${responseError?.message ?? errorMessage}`, provider, modelId, { originalError: apiError });
     case 413:
-      return errors.model.contextLength(
-        `${provider} API context length exceeded: ${errorDetails}`,
-        provider,
-        modelId,
-        { originalError: apiError, responseData: data }
-      );
-      
+      return errors.model.contextLength(`Context length exceeded for ${provider} model ${modelId}`, provider, modelId, { originalError: apiError });
     case 422:
-      if (data.error?.type === 'content_filter' || 
-          data.error?.message?.includes('content') ||
-          data.error?.message?.includes('policy')) {
-        return errors.model.contentFiltered(
-          `${provider} API content filtered: ${errorDetails}`,
-          provider,
-          modelId,
-          { originalError: apiError, responseData: data }
-        );
-      }
-      return errors.model.invalidRequest(
-        `${provider} API invalid request: ${errorDetails}`,
-        provider,
-        modelId,
-        { originalError: apiError, responseData: data }
-      );
-      
+       if (responseError?.type === 'content_policy_violation') {
+         return errors.model.contentFiltered(`Content filtered by ${provider}`, provider, modelId, { originalError: apiError });
+       }
+       return errors.model.invalidRequest(`Unprocessable entity error from ${provider}: ${responseError?.message ?? errorMessage}`, provider, modelId, { originalError: apiError });
+    case 500:
+    case 502:
+    case 503:
+    case 504:
+      return errors.model.unavailable(`${provider} service unavailable (Status: ${status})`, provider, modelId, { originalError: apiError }, true); // Retryable
     default:
-      return modelError;
+      return modelError; // Return the default error
   }
 }
-
-export default {
-  AppError,
-  ModelError,
-  NetworkError,
-  DatabaseError,
-  ErrorType,
-  ErrorSeverity,
-  setupErrorHandler,
-  errors,
-  isRetryableError,
-  classifyExternalError
-};

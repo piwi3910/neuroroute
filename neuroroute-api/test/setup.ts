@@ -22,6 +22,7 @@ global.console = {
 };
 
 // Clean up after all tests
+// @ts-ignore
 afterAll(async () => {
   // Add any cleanup logic here
 });
