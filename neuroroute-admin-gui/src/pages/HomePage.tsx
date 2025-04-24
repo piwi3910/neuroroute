@@ -1,20 +1,36 @@
 import { useState, useEffect } from 'react';
-import { 
-  Title, 
-  Text, 
-  Grid, 
-  Paper, 
-  Group, 
-  Badge, 
-  Table, 
+import {
+  Title,
+  Text,
+  Grid,
+  Paper,
+  Group,
+  Badge,
+  Table,
   ScrollArea,
   Card,
   RingProgress,
   Center,
   Stack,
   Divider,
-  Box
+  Box,
+  ThemeIcon,
+  Flex,
+  Tooltip,
+  rem,
+  Container,
+  Overlay,
+  Button
 } from '@mantine/core';
+import {
+  IconChartPie,
+  IconChartLine,
+  IconChartBar,
+  IconServer,
+  IconActivity,
+  IconList,
+  IconRefresh
+} from '@tabler/icons-react';
 import { 
   LineChart, 
   Line, 
@@ -218,73 +234,145 @@ const LatencyPerModelChart = ({ data }) => (
 );
 
 const SystemMetricsDisplay = ({ metrics }) => (
-  <Group grow>
-    <Card withBorder p="md">
-      <Center>
-        <RingProgress
-          sections={[{ value: metrics.cpu, color: metrics.cpu > 80 ? 'red' : metrics.cpu > 60 ? 'orange' : 'teal' }]}
-          label={
-            <Text ta="center" fw={700} size="xl">
-              {metrics.cpu}%
-            </Text>
-          }
-        />
-      </Center>
-      <Text ta="center" fw={500} mt="md">
-        CPU Usage
-      </Text>
-    </Card>
+  <Grid gutter="xl">
+    <Grid.Col span={{ base: 12, md: 4 }}>
+      <Card withBorder p="lg" radius="lg" className="dashboard-card">
+        <Center>
+          <RingProgress
+            size={180}
+            thickness={16}
+            roundCaps
+            sections={[{
+              value: metrics.cpu,
+              color: metrics.cpu > 80 ? 'red' :
+                     metrics.cpu > 60 ? 'orange' :
+                     'var(--mantine-color-primary-5)'
+            }]}
+            label={
+              <div>
+                <Text ta="center" fw={700} size="2rem" color={
+                  metrics.cpu > 80 ? 'red' :
+                  metrics.cpu > 60 ? 'orange' :
+                  'var(--mantine-color-primary-5)'
+                }>
+                  {metrics.cpu}%
+                </Text>
+                <Text ta="center" c="dimmed" size="xs">of 100%</Text>
+              </div>
+            }
+          />
+        </Center>
+        <Group position="center" mt="md">
+          <ThemeIcon size="md" radius="md" variant="light" color="primary">
+            <IconServer size={16} />
+          </ThemeIcon>
+          <Text ta="center" fw={600} size="lg">
+            CPU Usage
+          </Text>
+        </Group>
+      </Card>
+    </Grid.Col>
     
-    <Card withBorder p="md">
-      <Center>
-        <RingProgress
-          sections={[{ value: metrics.memory, color: metrics.memory > 80 ? 'red' : metrics.memory > 60 ? 'orange' : 'blue' }]}
-          label={
-            <Text ta="center" fw={700} size="xl">
-              {metrics.memory}%
-            </Text>
-          }
-        />
-      </Center>
-      <Text ta="center" fw={500} mt="md">
-        Memory Usage
-      </Text>
-    </Card>
+    <Grid.Col span={{ base: 12, md: 4 }}>
+      <Card withBorder p="lg" radius="lg" className="dashboard-card">
+        <Center>
+          <RingProgress
+            size={180}
+            thickness={16}
+            roundCaps
+            sections={[{
+              value: metrics.memory,
+              color: metrics.memory > 80 ? 'red' :
+                     metrics.memory > 60 ? 'orange' :
+                     'var(--mantine-color-secondary-5)'
+            }]}
+            label={
+              <div>
+                <Text ta="center" fw={700} size="2rem" color={
+                  metrics.memory > 80 ? 'red' :
+                  metrics.memory > 60 ? 'orange' :
+                  'var(--mantine-color-secondary-5)'
+                }>
+                  {metrics.memory}%
+                </Text>
+                <Text ta="center" c="dimmed" size="xs">of 100%</Text>
+              </div>
+            }
+          />
+        </Center>
+        <Group position="center" mt="md">
+          <ThemeIcon size="md" radius="md" variant="light" color="secondary">
+            <IconServer size={16} />
+          </ThemeIcon>
+          <Text ta="center" fw={600} size="lg">
+            Memory Usage
+          </Text>
+        </Group>
+      </Card>
+    </Grid.Col>
     
-    <Card withBorder p="md">
-      <Center>
-        <RingProgress
-          sections={[{ value: metrics.disk, color: metrics.disk > 80 ? 'red' : metrics.disk > 60 ? 'orange' : 'green' }]}
-          label={
-            <Text ta="center" fw={700} size="xl">
-              {metrics.disk}%
-            </Text>
-          }
-        />
-      </Center>
-      <Text ta="center" fw={500} mt="md">
-        Disk Usage
-      </Text>
-    </Card>
-  </Group>
+    <Grid.Col span={{ base: 12, md: 4 }}>
+      <Card withBorder p="lg" radius="lg" className="dashboard-card">
+        <Center>
+          <RingProgress
+            size={180}
+            thickness={16}
+            roundCaps
+            sections={[{
+              value: metrics.disk,
+              color: metrics.disk > 80 ? 'red' :
+                     metrics.disk > 60 ? 'orange' :
+                     'var(--mantine-color-accent-5)'
+            }]}
+            label={
+              <div>
+                <Text ta="center" fw={700} size="2rem" color={
+                  metrics.disk > 80 ? 'red' :
+                  metrics.disk > 60 ? 'orange' :
+                  'var(--mantine-color-accent-5)'
+                }>
+                  {metrics.disk}%
+                </Text>
+                <Text ta="center" c="dimmed" size="xs">of 100%</Text>
+              </div>
+            }
+          />
+        </Center>
+        <Group position="center" mt="md">
+          <ThemeIcon size="md" radius="md" variant="light" color="accent">
+            <IconServer size={16} />
+          </ThemeIcon>
+          <Text ta="center" fw={600} size="lg">
+            Disk Usage
+          </Text>
+        </Group>
+      </Card>
+    </Grid.Col>
+  </Grid>
 );
 
 // Flow Architecture Diagram Component
 const FlowArchitectureDiagram = ({ latencyData }) => {
   const boxStyle = {
-    border: '2px solid #ccc',
-    borderRadius: '8px',
-    padding: '10px',
+    border: '2px solid var(--mantine-color-gray-3)',
+    borderRadius: '10px',
+    padding: '12px',
     textAlign: 'center' as const,
     position: 'relative' as const,
-    minWidth: '120px',
-    backgroundColor: '#f9f9f9'
+    minWidth: '130px',
+    backgroundColor: 'white',
+    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
+    transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+    ':hover': {
+      transform: 'translateY(-2px)',
+      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+    }
   };
 
   const arrowStyle = {
     position: 'relative' as const,
-    height: '2px',
-    backgroundColor: '#ccc',
+    height: '3px',
+    background: 'linear-gradient(to right, var(--mantine-color-gray-3), var(--mantine-color-gray-5))',
     flex: 1,
     margin: '0 5px',
     minWidth: '30px'
@@ -294,119 +382,140 @@ const FlowArchitectureDiagram = ({ latencyData }) => {
     position: 'absolute' as const,
     top: '-12px',
     right: '-12px',
-    backgroundColor: '#2196F3',
+    background: 'linear-gradient(135deg, var(--mantine-color-primary-5), var(--mantine-color-primary-7))',
     color: 'white',
     borderRadius: '12px',
-    padding: '2px 8px',
+    padding: '3px 10px',
     fontSize: '12px',
-    fontWeight: 'bold'
+    fontWeight: 'bold',
+    boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
   };
 
   const modelContainerStyle = {
     display: 'flex' as const,
     flexDirection: 'column' as const,
-    gap: '10px',
-    border: '2px dashed #ccc',
-    borderRadius: '8px',
-    padding: '15px',
-    backgroundColor: '#f0f0f0'
+    gap: '12px',
+    border: '2px dashed var(--mantine-color-gray-4)',
+    borderRadius: '12px',
+    padding: '20px',
+    backgroundColor: 'var(--mantine-color-gray-0)',
+    boxShadow: 'inset 0 2px 8px rgba(0, 0, 0, 0.05)'
   };
 
   return (
-    <Card withBorder p="md">
-      <Title order={4} mb="md">Flow Architecture</Title>
-      <Text mb="lg">End-to-end request flow with component latencies (ms)</Text>
-      
-      <Box mb="lg">
-        <Group position="center" align="center" style={{ flexWrap: 'nowrap' }}>
-          {/* Input */}
-          <Box style={boxStyle}>
-            <Text fw={500}>Input</Text>
-            <div style={latencyBadgeStyle}>{latencyData.input} ms</div>
-          </Box>
-          
-          {/* Arrow */}
-          <div style={arrowStyle}>
-            <div style={{ position: 'absolute', right: '-5px', top: '-5px', width: '0', height: '0', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '5px solid #ccc' }}></div>
-          </div>
-          
-          {/* Preprocessor */}
-          <Box style={boxStyle}>
-            <Text fw={500}>Preprocessor</Text>
-            <div style={latencyBadgeStyle}>{latencyData.preprocessor} ms</div>
-          </Box>
-          
-          {/* Arrow */}
-          <div style={arrowStyle}>
-            <div style={{ position: 'absolute', right: '-5px', top: '-5px', width: '0', height: '0', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '5px solid #ccc' }}></div>
-          </div>
-          
-          {/* Classifier */}
-          <Box style={boxStyle}>
-            <Text fw={500}>Classifier</Text>
-            <div style={latencyBadgeStyle}>{latencyData.classifier} ms</div>
-          </Box>
-          
-          {/* Arrow */}
-          <div style={arrowStyle}>
-            <div style={{ position: 'absolute', right: '-5px', top: '-5px', width: '0', height: '0', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '5px solid #ccc' }}></div>
-          </div>
-          
-          {/* Router */}
-          <Box style={boxStyle}>
-            <Text fw={500}>Router</Text>
-            <div style={latencyBadgeStyle}>{latencyData.router} ms</div>
-          </Box>
-          
-          {/* Arrow */}
-          <div style={arrowStyle}>
-            <div style={{ position: 'absolute', right: '-5px', top: '-5px', width: '0', height: '0', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '5px solid #ccc' }}></div>
-          </div>
-          
-          {/* Models Container */}
-          <Box style={modelContainerStyle}>
-            <Text fw={500} ta="center">Models</Text>
-            <Group position="center" spacing="xs">
-              {Object.entries(latencyData.models).map(([model, latency]) => (
-                <Box key={model} style={{ ...boxStyle, minWidth: '100px' }}>
-                  <Text size="sm">{model}</Text>
-                  <div style={latencyBadgeStyle}>{latency} ms</div>
-                </Box>
-              ))}
+    <Card withBorder p="lg" radius="lg" className="dashboard-card">
+      <ScrollArea>
+        <Box px="md">
+          <Box mb="lg">
+            <Group position="center" align="center" style={{ flexWrap: 'nowrap', overflowX: 'auto', padding: '20px 0' }}>
+              {/* Input */}
+              <Box style={boxStyle}>
+                <ThemeIcon size="md" radius="md" color="primary" mb="xs">
+                  <IconActivity size={16} />
+                </ThemeIcon>
+                <Text fw={600} size="sm">Input</Text>
+                <div style={latencyBadgeStyle}>{latencyData.input} ms</div>
+              </Box>
+              
+              {/* Arrow */}
+              <div style={arrowStyle}>
+                <div style={{ position: 'absolute', right: '-6px', top: '-6px', width: '0', height: '0', borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '6px solid var(--mantine-color-gray-5)' }}></div>
+              </div>
+              
+              {/* Preprocessor */}
+              <Box style={boxStyle}>
+                <ThemeIcon size="md" radius="md" color="primary" mb="xs">
+                  <IconActivity size={16} />
+                </ThemeIcon>
+                <Text fw={600} size="sm">Preprocessor</Text>
+                <div style={latencyBadgeStyle}>{latencyData.preprocessor} ms</div>
+              </Box>
+              
+              {/* Arrow */}
+              <div style={arrowStyle}>
+                <div style={{ position: 'absolute', right: '-6px', top: '-6px', width: '0', height: '0', borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '6px solid var(--mantine-color-gray-5)' }}></div>
+              </div>
+              
+              {/* Classifier */}
+              <Box style={boxStyle}>
+                <ThemeIcon size="md" radius="md" color="secondary" mb="xs">
+                  <IconActivity size={16} />
+                </ThemeIcon>
+                <Text fw={600} size="sm">Classifier</Text>
+                <div style={latencyBadgeStyle}>{latencyData.classifier} ms</div>
+              </Box>
+              
+              {/* Arrow */}
+              <div style={arrowStyle}>
+                <div style={{ position: 'absolute', right: '-6px', top: '-6px', width: '0', height: '0', borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '6px solid var(--mantine-color-gray-5)' }}></div>
+              </div>
+              
+              {/* Router */}
+              <Box style={boxStyle}>
+                <ThemeIcon size="md" radius="md" color="secondary" mb="xs">
+                  <IconActivity size={16} />
+                </ThemeIcon>
+                <Text fw={600} size="sm">Router</Text>
+                <div style={latencyBadgeStyle}>{latencyData.router} ms</div>
+              </Box>
+              
+              {/* Arrow */}
+              <div style={arrowStyle}>
+                <div style={{ position: 'absolute', right: '-6px', top: '-6px', width: '0', height: '0', borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '6px solid var(--mantine-color-gray-5)' }}></div>
+              </div>
+              
+              {/* Models Container */}
+              <Box style={modelContainerStyle}>
+                <Text fw={600} ta="center" size="sm">Models</Text>
+                <Group position="center" spacing="xs">
+                  {Object.entries(latencyData.models).map(([model, latency]) => (
+                    <Box key={model} style={{ ...boxStyle, minWidth: '110px' }}>
+                      <ThemeIcon size="md" radius="md" color="accent" mb="xs">
+                        <IconActivity size={16} />
+                      </ThemeIcon>
+                      <Text size="xs" fw={600}>{model}</Text>
+                      <div style={latencyBadgeStyle}>{latency} ms</div>
+                    </Box>
+                  ))}
+                </Group>
+              </Box>
+              
+              {/* Arrow */}
+              <div style={arrowStyle}>
+                <div style={{ position: 'absolute', right: '-6px', top: '-6px', width: '0', height: '0', borderTop: '6px solid transparent', borderBottom: '6px solid transparent', borderLeft: '6px solid var(--mantine-color-gray-5)' }}></div>
+              </div>
+              
+              {/* Output */}
+              <Box style={boxStyle}>
+                <ThemeIcon size="md" radius="md" color="accent" mb="xs">
+                  <IconActivity size={16} />
+                </ThemeIcon>
+                <Text fw={600} size="sm">Output</Text>
+                <div style={latencyBadgeStyle}>{latencyData.output} ms</div>
+              </Box>
             </Group>
           </Box>
           
-          {/* Arrow */}
-          <div style={arrowStyle}>
-            <div style={{ position: 'absolute', right: '-5px', top: '-5px', width: '0', height: '0', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '5px solid #ccc' }}></div>
-          </div>
-          
-          {/* Output */}
-          <Box style={boxStyle}>
-            <Text fw={500}>Output</Text>
-            <div style={latencyBadgeStyle}>{latencyData.output} ms</div>
-          </Box>
-        </Group>
-      </Box>
-      
-      <Group position="apart">
-        <Text size="sm" c="dimmed">Total processing pipeline latency (excluding model): {latencyData.input + latencyData.preprocessor + latencyData.classifier + latencyData.router + latencyData.output} ms</Text>
-        <Badge color="blue">Updated: {new Date().toLocaleTimeString()}</Badge>
-      </Group>
+          <Group position="apart">
+            <Text size="sm" c="dimmed">Total pipeline latency: <Text component="span" fw={600} c="primary">{latencyData.input + latencyData.preprocessor + latencyData.classifier + latencyData.router + latencyData.output} ms</Text> (excluding model)</Text>
+            <Badge size="lg" radius="md" color="primary" variant="light">Updated: {new Date().toLocaleTimeString()}</Badge>
+          </Group>
+        </Box>
+      </ScrollArea>
     </Card>
   );
 };
 
 // Real-time log component
 const RealTimeLog = ({ logs }) => (
-  <Card withBorder p="md">
-    <Group position="apart" mb="md">
-      <Title order={4}>Real-time Prompt Log</Title>
-      <Badge>{logs.length} entries</Badge>
+  <Card withBorder p="lg" radius="lg">
+    <Group position="apart" mb="md" px="md">
+      <Text size="sm" c="dimmed">Latest activity</Text>
+      <Badge size="lg" radius="md" variant="light">{logs.length} entries</Badge>
     </Group>
     
-    <ScrollArea h={300}>
-      <Table striped highlightOnHover>
+    <ScrollArea h={400} scrollbarSize={6}>
+      <Table striped highlightOnHover horizontalSpacing="lg" verticalSpacing="md">
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Time</Table.Th>
@@ -420,17 +529,46 @@ const RealTimeLog = ({ logs }) => (
         <Table.Tbody>
           {logs.map((log) => (
             <Table.Tr key={log.id}>
-              <Table.Td>{new Date(log.timestamp).toLocaleTimeString()}</Table.Td>
               <Table.Td>
-                <Text lineClamp={1} style={{ maxWidth: '300px' }}>
-                  {log.prompt}
+                <Text size="sm" fw={500}>
+                  {new Date(log.timestamp).toLocaleTimeString()}
                 </Text>
               </Table.Td>
-              <Table.Td>{log.classifier}</Table.Td>
-              <Table.Td>{log.model}</Table.Td>
-              <Table.Td>{log.tokens}</Table.Td>
               <Table.Td>
-                <Badge color={log.status === 'success' ? 'green' : 'red'}>
+                <Tooltip label={log.prompt} multiline width={300}>
+                  <Text lineClamp={1} size="sm" style={{ maxWidth: '300px' }}>
+                    {log.prompt}
+                  </Text>
+                </Tooltip>
+              </Table.Td>
+              <Table.Td>
+                <Badge
+                  variant="dot"
+                  color={
+                    log.classifier === 'general' ? 'blue' :
+                    log.classifier === 'code' ? 'green' :
+                    'grape'
+                  }
+                >
+                  {log.classifier}
+                </Badge>
+              </Table.Td>
+              <Table.Td>
+                <Text size="sm" fw={500}>
+                  {log.model}
+                </Text>
+              </Table.Td>
+              <Table.Td>
+                <Text size="sm" fw={500}>
+                  {log.tokens.toLocaleString()}
+                </Text>
+              </Table.Td>
+              <Table.Td>
+                <Badge
+                  variant="filled"
+                  color={log.status === 'success' ? 'green' : 'red'}
+                  radius="sm"
+                >
                   {log.status}
                 </Badge>
               </Table.Td>
@@ -496,45 +634,132 @@ export function HomePage() {
   }, [promptsData, tokensData, logs]);
 
   return (
-    <Stack spacing="lg">
-      <Title order={2}>Dashboard</Title>
-      <Text>Real-time monitoring of Neuroroute API performance and usage.</Text>
+    <Container fluid px="lg" py="md">
+      {/* Header with gradient background */}
+      <Paper
+        mb="xl"
+        p="xl"
+        radius="md"
+        sx={{
+          position: 'relative',
+          overflow: 'hidden',
+          background: 'linear-gradient(135deg, rgba(33, 150, 243, 0.8), rgba(33, 150, 243, 0.6))',
+          color: 'white',
+        }}
+      >
+        <Flex justify="space-between" align="center">
+          <Box>
+            <Title order={2} mb="xs">Neuroroute Dashboard</Title>
+            <Text size="lg">Real-time monitoring of Neuroroute API performance and usage.</Text>
+          </Box>
+          <Tooltip label="Refresh data">
+            <Button
+              variant="white"
+              radius="xl"
+              leftSection={<IconRefresh size={16} />}
+              onClick={() => {
+                setModelData(generateModelData());
+                setTokensData(generateTimeData(24, 5000, 3000));
+                setPromptsData(generateTimeData(24, 150, 100));
+                setSystemMetrics(generateSystemMetrics());
+                setFlowLatencyData(generateFlowLatencyData());
+              }}
+            >
+              Refresh
+            </Button>
+          </Tooltip>
+        </Flex>
+      </Paper>
       
       {/* First row: Tokens per Model, Tokens per Hour, Prompts per Hour */}
-      <Grid gutter="md">
-        <Grid.Col span={4}>
-          <Paper withBorder p="md" radius="md">
-            <Title order={4} mb="md">Tokens per Model</Title>
+      <Grid gutter="xl" mb="xl">
+        <Grid.Col span={{ base: 12, md: 4 }}>
+          <Paper withBorder p="lg" radius="lg" className="dashboard-card">
+            <Group mb="md" position="apart">
+              <Group>
+                <ThemeIcon size="lg" radius="md" variant="light" color="primary">
+                  <IconChartPie size={20} />
+                </ThemeIcon>
+                <Title order={4}>Tokens per Model</Title>
+              </Group>
+              <Badge size="lg" radius="md" color="primary">Live</Badge>
+            </Group>
             <TokensPerModelChart data={modelData} />
           </Paper>
         </Grid.Col>
         
-        <Grid.Col span={4}>
-          <Paper withBorder p="md" radius="md">
-            <Title order={4} mb="md">Tokens per Hour</Title>
+        <Grid.Col span={{ base: 12, md: 4 }}>
+          <Paper withBorder p="lg" radius="lg" className="dashboard-card">
+            <Group mb="md" position="apart">
+              <Group>
+                <ThemeIcon size="lg" radius="md" variant="light" color="secondary">
+                  <IconChartLine size={20} />
+                </ThemeIcon>
+                <Title order={4}>Tokens per Hour</Title>
+              </Group>
+              <Badge size="lg" radius="md" color="secondary">Live</Badge>
+            </Group>
             <TokensPerHourChart data={tokensData} />
           </Paper>
         </Grid.Col>
         
-        <Grid.Col span={4}>
-          <Paper withBorder p="md" radius="md">
-            <Title order={4} mb="md">Prompts per Hour</Title>
+        <Grid.Col span={{ base: 12, md: 4 }}>
+          <Paper withBorder p="lg" radius="lg" className="dashboard-card">
+            <Group mb="md" position="apart">
+              <Group>
+                <ThemeIcon size="lg" radius="md" variant="light" color="accent">
+                  <IconChartBar size={20} />
+                </ThemeIcon>
+                <Title order={4}>Prompts per Hour</Title>
+              </Group>
+              <Badge size="lg" radius="md" color="accent">Live</Badge>
+            </Group>
             <PromptsPerHourChart data={promptsData} />
           </Paper>
         </Grid.Col>
       </Grid>
       
       {/* Second row: System Resources (spread across the screen) */}
-      <Paper withBorder p="md" radius="md">
-        <Title order={4} mb="md">System Resources</Title>
+      <Paper withBorder p="lg" radius="lg" mb="xl" className="dashboard-card">
+        <Group mb="md" position="apart">
+          <Group>
+            <ThemeIcon size="lg" radius="md" variant="light" color="primary">
+              <IconServer size={20} />
+            </ThemeIcon>
+            <Title order={4}>System Resources</Title>
+          </Group>
+          <Badge size="lg" radius="md" color="primary">Live</Badge>
+        </Group>
         <SystemMetricsDisplay metrics={systemMetrics} />
       </Paper>
       
       {/* Third row: Flow Architecture Diagram (spread across the screen) */}
-      <FlowArchitectureDiagram latencyData={flowLatencyData} />
+      <Paper withBorder p="lg" radius="lg" mb="xl" className="dashboard-card">
+        <Group mb="md" position="apart">
+          <Group>
+            <ThemeIcon size="lg" radius="md" variant="light" color="secondary">
+              <IconActivity size={20} />
+            </ThemeIcon>
+            <Title order={4}>Flow Architecture</Title>
+          </Group>
+          <Badge size="lg" radius="md" color="secondary">Live</Badge>
+        </Group>
+        <FlowArchitectureDiagram latencyData={flowLatencyData} />
+      </Paper>
       
       {/* Fourth row: Prompts Log (spread across the screen) */}
-      <RealTimeLog logs={logs} />
-    </Stack>
+      <Paper withBorder p="lg" radius="lg" mb="xl" className="dashboard-card">
+        <Group mb="md" position="apart">
+          <Group>
+            <ThemeIcon size="lg" radius="md" variant="light" color="accent">
+              <IconList size={20} />
+            </ThemeIcon>
+            <Title order={4}>Real-time Prompt Log</Title>
+          </Group>
+          <Badge size="lg" radius="md" color="accent">Live</Badge>
+        </Group>
+        <RealTimeLog logs={logs} />
+      </Paper>
+    </Container>
   );
 }
