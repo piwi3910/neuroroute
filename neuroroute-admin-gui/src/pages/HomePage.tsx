@@ -494,26 +494,23 @@ export function HomePage() {
             <TokensPerHourChart data={tokensData} />
           </Paper>
         </Grid.Col>
+      </Grid>
+      
+      <Grid gutter="md">
+        <Grid.Col span={4}>
+          <Paper withBorder p="md" radius="md">
+            <Title order={4} mb="md">System Resources</Title>
+            <SystemMetricsDisplay metrics={systemMetrics} />
+          </Paper>
+        </Grid.Col>
         
-        <Grid.Col span={6}>
+        <Grid.Col span={8}>
           <Paper withBorder p="md" radius="md">
             <Title order={4} mb="md">Tokens per Model</Title>
             <TokensPerModelChart data={modelData} />
           </Paper>
         </Grid.Col>
-        
-        <Grid.Col span={6}>
-          <Paper withBorder p="md" radius="md">
-            <Title order={4} mb="md">Latency per Model</Title>
-            <LatencyPerModelChart data={latencyData} />
-          </Paper>
-        </Grid.Col>
       </Grid>
-      
-      <Paper withBorder p="md" radius="md">
-        <Title order={4} mb="md">System Resources</Title>
-        <SystemMetricsDisplay metrics={systemMetrics} />
-      </Paper>
       
       <Divider my="sm" />
       
