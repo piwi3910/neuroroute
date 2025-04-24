@@ -54,12 +54,33 @@ export interface LoginResponse {
 export const authService = {
   // Login user
   login: async (credentials: LoginCredentials): Promise<LoginResponse> => {
-    const response = await api.post<LoginResponse>('/auth/login', credentials);
+    // MOCK IMPLEMENTATION - In a real app, this would make an API call
+    // For development/demo purposes, we'll accept any credentials
+    
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Mock successful response
+    const mockResponse: LoginResponse = {
+      token: 'mock-jwt-token-' + Math.random().toString(36).substring(2),
+      user: {
+        id: 'user-1',
+        email: credentials.email,
+        role: 'admin',
+      }
+    };
+    
     // Store token in localStorage
-    if (response.data.token) {
-      localStorage.setItem('auth_token', response.data.token);
-    }
-    return response.data;
+    localStorage.setItem('auth_token', mockResponse.token);
+    
+    return mockResponse;
+    
+    // REAL IMPLEMENTATION (commented out for now)
+    // const response = await api.post<LoginResponse>('/auth/login', credentials);
+    // if (response.data.token) {
+    //   localStorage.setItem('auth_token', response.data.token);
+    // }
+    // return response.data;
   },
 
   // Logout user
