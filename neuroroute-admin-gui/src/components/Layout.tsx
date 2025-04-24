@@ -51,7 +51,15 @@ export function Layout() {
           </Group>
 
           {/* User menu */}
-          <Menu position="bottom-end" withArrow shadow="md" withinPortal>
+          <Menu
+            position="bottom-end"
+            withArrow
+            shadow="md"
+            withinPortal
+            zIndex={1000}
+            keepMounted={false}
+            offset={5}
+          >
             <Menu.Target>
               <UnstyledButton>
                 <Group gap={7}>
