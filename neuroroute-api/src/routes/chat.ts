@@ -1,211 +1,109 @@
-import { FastifyPluginAsync } from 'fastify';
+import { FastifyPluginAsync, FastifyRequest } from 'fastify';
+import { z } from 'zod';
 import { createRouterService } from '../services/router.js';
-import { ChatMessage, ToolDefinition } from '../models/base-adapter.js';
+// Assuming ChatMessage and ToolDefinition types align or can be adjusted
+// We might need to redefine them based on Zod or ensure compatibility
+import { ChatMessage as InternalChatMessage, ToolDefinition as InternalToolDefinition } from '../models/base-adapter.js';
 import { translateToOpenAIResponse, translateToOpenAIStreamingFormat, formatSSE, extractUserPrompt } from '../utils/openai-translator.js';
 import crypto from 'crypto';
 import { getModelAdapter } from '../models/adapter-registry.js';
 
-/**
- * Chat completions API compatible with OpenAI specification
- * 
- * This endpoint provides an OpenAI-compatible chat completions API
- * that leverages our multi-provider architecture behind the scenes.
- */
+// --- Zod Schema Definitions ---
+
+const ImageUrlSchema = z.object({
+  url: z.string().url({ message: "Invalid URL format" }),
+  detail: z.enum(['low', 'high', 'auto']).default('auto').optional(),
+});
+
+const ContentPartSchema = z.union([
+  z.object({
+    type: z.literal('text'),
+    text: z.string(),
+  }),
+  z.object({
+    type: z.literal('image_url'),
+    image_url: ImageUrlSchema,
+  }),
+]);
+
+const ChatMessageSchema = z.object({
+  role: z.enum(['system', 'user', 'assistant', 'function', 'tool']),
+  content: z.union([
+    z.string(), // Allows simple string content
+    z.array(ContentPartSchema).min(1, { message: "Content array must not be empty if provided" }) // Allows non-empty array of content parts
+  ]).nullable(), // Allows null content (e.g., for assistant messages with tool calls but no text)
+  name: z.string().optional(),
+  tool_call_id: z.string().optional(),
+});
+
+const FunctionDefinitionSchema = z.object({
+  name: z.string(),
+  description: z.string().optional(),
+  parameters: z.record(z.unknown()), // Represents JSON Schema object
+});
+
+const ToolDefinitionSchema = z.object({
+  type: z.literal('function'),
+  function: FunctionDefinitionSchema,
+});
+
+const ToolChoiceSchema = z.union([
+  z.enum(['auto', 'none']),
+  z.object({
+    type: z.literal('function'),
+    function: z.object({
+      name: z.string(),
+    }),
+  }),
+]);
+
+const ChatCompletionRequestBodySchema = z.object({
+  model: z.string().optional().describe('Model ID to use'),
+  messages: z.array(ChatMessageSchema).min(1, "Messages array cannot be empty"),
+  temperature: z.number().min(0).max(2).default(0.7).optional(),
+  max_tokens: z.number().int().positive().default(1024).optional(),
+  stream: z.boolean().default(false).optional(),
+  tools: z.array(ToolDefinitionSchema).optional(),
+  tool_choice: ToolChoiceSchema.optional(),
+});
+
+// Infer the type for cleaner handler usage (requires fastify-type-provider-zod setup in app.ts)
+type ChatCompletionRequest = FastifyRequest<{ Body: z.infer<typeof ChatCompletionRequestBodySchema> }>;
+
+// --- Route Definition ---
+
 const chatRoutes: FastifyPluginAsync = async (fastify) => {
-  // Create router service for future use
-  createRouterService(fastify);
-  
-  // Create route options
-  const routeOptions: any = {
+  createRouterService(fastify); // Keep service creation
+
+  const routeOptions = {
+    // Replace the old JSON schema with the Zod schema
     schema: {
-      description: 'Chat completions API compatible with OpenAI specification',
+      description: 'Chat completions API compatible with OpenAI specification (Zod validated)',
       tags: ['chat'],
-      body: {
-        type: 'object',
-        required: ['messages'],
-        properties: {
-          model: { type: 'string', description: 'Model ID to use' },
-          messages: { 
-            type: 'array', 
-            items: {
-              type: 'object',
-              required: ['role', 'content'],
-              properties: {
-                role: { type: 'string', enum: ['system', 'user', 'assistant', 'function', 'tool'] },
-                content: {
-                  oneOf: [
-                    { type: 'string', nullable: true }, // Original string type (allow null for assistant messages without content)
-                    { // Array type for multimodal content
-                      type: 'array',
-                      items: {
-                        type: 'object',
-                        required: ['type'],
-                        properties: {
-                          type: { type: 'string', enum: ['text', 'image_url'] },
-                          text: { type: 'string' }, // For text parts
-                          image_url: { // For image parts
-                            type: 'object',
-                            required: ['url'],
-                            properties: {
-                              url: { type: 'string', format: 'uri', description: 'The URL of the image.' },
-                              detail: { type: 'string', enum: ['low', 'high', 'auto'], default: 'auto', description: 'Specifies the detail level of the image.' }
-                            }
-                          }
-                        },
-                        // Note: JSON Schema doesn't easily enforce conditional requirements (e.g., 'text' required if type is 'text').
-                        // Further validation might be needed in the handler if strict enforcement is required.
-                      }
-                    }
-                  ],
-                  description: 'The content of the message, can be a string or an array of content parts (for multimodal input).'
-                },
-                name: { type: 'string' },
-                tool_call_id: { type: 'string' }
-              }
-            }
-          },
-          temperature: { type: 'number', default: 0.7 },
-          max_tokens: { type: 'integer', default: 1024 },
-          stream: { type: 'boolean', default: false },
-          tools: { 
-            type: 'array', 
-            items: { 
-              type: 'object',
-              required: ['type', 'function'],
-              properties: {
-                type: { type: 'string', enum: ['function'] },
-                function: {
-                  type: 'object',
-                  required: ['name', 'parameters'],
-                  properties: {
-                    name: { type: 'string' },
-                    description: { type: 'string' },
-                    parameters: { type: 'object' }
-                  }
-                }
-              }
-            } 
-          },
-          tool_choice: { 
-            oneOf: [
-              { type: 'string', enum: ['auto', 'none'] },
-              { 
-                type: 'object',
-                required: ['type', 'function'],
-                properties: {
-                  type: { type: 'string', enum: ['function'] },
-                  function: {
-                    type: 'object',
-                    required: ['name'],
-                    properties: {
-                      name: { type: 'string' }
-                    }
-                  }
-                }
-              }
-            ]
-          }
-        }
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            id: { type: 'string' },
-            object: { type: 'string', default: 'chat.completion' },
-            created: { type: 'integer' },
-            model: { type: 'string' },
-            choices: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  index: { type: 'integer' },
-                  message: {
-                    type: 'object',
-                    properties: {
-                      role: { type: 'string' },
-                      content: { type: 'string', nullable: true },
-                      tool_calls: { 
-                        type: 'array', 
-                        items: {
-                          type: 'object',
-                          properties: {
-                            id: { type: 'string' },
-                            type: { type: 'string' },
-                            function: {
-                              type: 'object',
-                              properties: {
-                                name: { type: 'string' },
-                                arguments: { type: 'string' }
-                              }
-                            }
-                          }
-                        } 
-                      }
-                    }
-                  },
-                  finish_reason: { type: 'string' }
-                }
-              }
-            },
-            usage: {
-              type: 'object',
-              properties: {
-                prompt_tokens: { type: 'integer' },
-                completion_tokens: { type: 'integer' },
-                total_tokens: { type: 'integer' }
-              }
-            }
-          }
-        },
-        400: {
-          type: 'object',
-          properties: {
-            error: { type: 'string' },
-          },
-        },
-        500: {
-          type: 'object',
-          properties: {
-            error: { type: 'string' },
-          },
-        },
-      },
+      body: ChatCompletionRequestBodySchema,
+      // TODO: Define Zod response schemas if needed for full type safety & validation
+      // response: {
+      //   200: ZodResponseSchema200,
+      //   400: ZodResponseSchema400,
+      //   500: ZodResponseSchema500
+      // }
     },
-    handler: async (request: any, reply: any) => {
+    handler: async (request: ChatCompletionRequest, reply: any) => { // Use inferred type
       const startTime = Date.now();
-      
+
       try {
-        const { 
-          messages, 
-          model: modelId, 
-          max_tokens = 1024, 
-          temperature = 0.7,
-          stream = false,
+        // Access validated and typed body directly
+        const {
+          messages,
+          model: modelId,
+          max_tokens, // Already has default from Zod
+          temperature, // Already has default from Zod
+          stream,      // Already has default from Zod
           tools,
           tool_choice
-        } = request.body as {
-          messages: ChatMessage[];
-          model?: string;
-          max_tokens?: number;
-          temperature?: number;
-          stream?: boolean;
-          tools?: ToolDefinition[];
-          tool_choice?: 'auto' | 'none' | { type: 'function'; function: { name: string } };
-        };
+        } = request.body; // No need for manual type assertion
 
-        // Validate messages
-        if (!messages || !Array.isArray(messages) || messages.length === 0) {
-          reply.code(400);
-          return {
-            error: 'Messages are required and must be a non-empty array',
-            code: 'INVALID_MESSAGES',
-            requestId: request.id,
-          };
-        }
-        
-        // Log request
+        // Log request (adjust based on Zod defaults if needed)
         request.log.info({
           messageCount: messages.length,
           modelId,
@@ -213,197 +111,147 @@ const chatRoutes: FastifyPluginAsync = async (fastify) => {
           temperature,
           stream,
           hasTools: !!tools && tools.length > 0,
-          apiKeyId: request.apiKey?.id,
-        }, 'Processing chat completion');
-        
-        // Generate a unique ID for this completion
+          apiKeyId: (request as any).apiKey?.id, // Keep temporary 'any' for apiKey until fully typed
+        }, 'Processing chat completion (Zod)');
+
         const completionId = `chatcmpl-${crypto.randomBytes(12).toString('hex')}`;
-        
-        // Handle streaming response
+
         if (stream) {
-          // Set appropriate headers for SSE
           reply.raw.writeHead(200, {
             'Content-Type': 'text/event-stream',
             'Cache-Control': 'no-cache',
             'Connection': 'keep-alive',
           });
-          
-          // Extract the user prompt for classification
-          const userPrompt = extractUserPrompt(messages);
-          
+
+          // Ensure messages conform to InternalChatMessage if different from Zod schema
+          const internalMessages = messages as InternalChatMessage[];
+          const userPrompt = extractUserPrompt(internalMessages);
+
           try {
-            // Get the appropriate adapter for this model
-            const adapter = getModelAdapter(fastify, modelId || 'gpt-4.1');
-            
-            // Check if the adapter supports streaming
+            const adapter = getModelAdapter(fastify, modelId || 'gpt-4.1'); // Default model?
+
             if (!adapter.supportsStreaming || !adapter.generateCompletionStream) {
               throw new Error(`Model ${modelId || 'gpt-4.1'} does not support streaming`);
             }
-            
-            // Prepare request options
+
             const options: any = {
               maxTokens: max_tokens,
               temperature,
-              messages,
+              messages: internalMessages, // Use potentially casted messages
               stream: true,
-              ...(tools ? { tools } : {}),
+              ...(tools ? { tools: tools as InternalToolDefinition[] } : {}), // Cast tools if needed
               ...(tool_choice ? { toolChoice: tool_choice } : {})
             };
-            
-            // Generate streaming completion
+
             const stream = adapter.generateCompletionStream(userPrompt, options);
-            
-            // Process each chunk
+
             for await (const chunk of stream) {
-              // Translate to OpenAI format
               const openAIChunk = translateToOpenAIStreamingFormat(chunk, completionId);
-              
-              // Format as SSE and send
               const sseData = formatSSE(openAIChunk);
               reply.raw.write(sseData);
-              
-              // If this is the final chunk, send [DONE]
               if (chunk.done) {
                 reply.raw.write(formatSSE('DONE'));
                 break;
               }
             }
-            
-            // End the response
             reply.raw.end();
-            
-            // Log success
+
             request.log.info({
               messageCount: messages.length,
               modelId: modelId || 'gpt-4.1',
               streaming: true,
               processingTime: (Date.now() - startTime) / 1000,
-            }, 'Chat completion streaming completed');
-            
-            return;
+            }, 'Chat completion streaming completed (Zod)');
+            return; // Important: return nothing for streaming reply
+
           } catch (error) {
-            // For streaming, we need to send an error as an SSE event
             const errorMessage = error instanceof Error ? error.message : String(error);
-            
-            // Log error
-            request.log.error({
-              error,
-              messageCount: messages.length,
-              modelId,
-              streaming: true,
-            }, 'Error processing streaming chat completion');
-            
-            // Send error as SSE
+            request.log.error({ error, messageCount: messages.length, modelId, streaming: true }, 'Error processing streaming chat completion (Zod)');
+
             const errorChunk = {
               id: completionId,
               object: 'chat.completion.chunk',
               created: Math.floor(Date.now() / 1000),
               model: modelId || 'gpt-4.1',
-              choices: [{
-                index: 0,
-                delta: { content: `Error: ${errorMessage}` },
-                finish_reason: 'error'
-              }]
+              choices: [{ index: 0, delta: { content: `Error: ${errorMessage}` }, finish_reason: 'error' }]
             };
-            
             reply.raw.write(formatSSE(errorChunk));
             reply.raw.write(formatSSE('DONE'));
             reply.raw.end();
-            
-            return;
+            return; // Important: return nothing for streaming reply
           }
         }
-        
-        // Non-streaming response
-        // Use router service to process the chat completion
-        // For now, we'll extract the user prompt and use the existing routePrompt method
-        // In a real implementation, we'd add a routeChatCompletion method to the router service
-        
-        // Extract the user prompt for classification
-        const userPrompt = extractUserPrompt(messages);
-        
+
+        // --- Non-streaming ---
+        // Ensure messages conform to InternalChatMessage if different from Zod schema
+        const internalMessages = messages as InternalChatMessage[];
+        const userPrompt = extractUserPrompt(internalMessages);
+
         if (!userPrompt) {
           reply.code(400);
-          return {
-            error: 'No user message found in the messages array',
-            code: 'INVALID_MESSAGES',
-            requestId: request.id,
-          };
+          return { error: 'No user message found in the messages array', code: 'INVALID_MESSAGES', requestId: request.id };
         }
-        
-        // Get the appropriate adapter for this model
-        const adapter = getModelAdapter(fastify, modelId || 'gpt-4.1');
-        
-        // Prepare request options
+
+        const adapter = getModelAdapter(fastify, modelId || 'gpt-4.1'); // Default model?
+
         const options: any = {
           maxTokens: max_tokens,
           temperature,
-          messages, // Pass the full messages array
-          ...(tools ? { tools } : {}),
+          messages: internalMessages, // Use potentially casted messages
+          ...(tools ? { tools: tools as InternalToolDefinition[] } : {}), // Cast tools if needed
           ...(tool_choice ? { toolChoice: tool_choice } : {})
         };
-        
-        // Generate completion using the adapter
+
         const modelResponse = await adapter.generateCompletion(userPrompt, options);
-        
-        // Translate to OpenAI format
         const openAIResponse = translateToOpenAIResponse(modelResponse);
-        
-        // Add request ID
         openAIResponse.id = completionId;
-        
-        // Log response
+
         request.log.info({
           modelUsed: modelResponse.model,
           tokens: modelResponse.tokens,
           processingTime: (Date.now() - startTime) / 1000,
-        }, 'Chat completion processed successfully');
-        
+        }, 'Chat completion processed successfully (Zod)');
+
         return openAIResponse;
+
       } catch (error: unknown) {
-        // Log error
-        request.log.error(error, 'Error processing chat completion');
-        
-        // Determine status code and error details
+        // Handle Zod validation errors specifically
+        if (error instanceof z.ZodError) {
+            request.log.error({ error: error.format() }, 'Zod validation error processing chat completion');
+            reply.code(400);
+            return {
+                error: "Invalid request body",
+                code: "VALIDATION_ERROR",
+                details: error.format(), // Provide detailed validation errors
+                request_id: request.id,
+            };
+        }
+
+        // Handle other errors
+        request.log.error(error, 'Error processing chat completion (Zod)');
         let statusCode = 500;
         let errorMessage = 'An error occurred while processing the chat completion';
         let errorCode = 'INTERNAL_ERROR';
-        
-        // Handle known error types
+
         if (error && typeof error === 'object') {
-          if ('statusCode' in error && typeof error.statusCode === 'number') {
-            statusCode = error.statusCode;
-          }
-          
-          if ('message' in error && typeof error.message === 'string') {
-            errorMessage = error.message;
-          }
-          
-          if ('code' in error && typeof error.code === 'string') {
-            errorCode = error.code;
-          }
+          if ('statusCode' in error && typeof error.statusCode === 'number') statusCode = error.statusCode;
+          if ('message' in error && typeof error.message === 'string') errorMessage = error.message;
+          if ('code' in error && typeof error.code === 'string') errorCode = error.code;
         }
-        
+
         reply.code(statusCode);
-        
-        // Return error response
-        return {
-          error: errorMessage,
-          code: errorCode,
-          request_id: request.id,
-        };
+        return { error: errorMessage, code: errorCode, request_id: request.id };
       }
     },
   };
-  
-  // Add authentication if available
-  if (fastify.hasDecorator('authenticate')) {
-    routeOptions.onRequest = [fastify.authenticate];
+
+  // Add authentication if available (assuming decorator exists)
+  if ((fastify as any).hasDecorator('authenticate')) {
+    (routeOptions as any).onRequest = [(fastify as any).authenticate];
   }
-  
-  // Register the route
+
+  // Register the route with the Zod schema
   fastify.post('/completions', routeOptions);
 };
-
 
 export default chatRoutes;
