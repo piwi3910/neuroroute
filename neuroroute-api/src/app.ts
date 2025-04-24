@@ -1,3 +1,4 @@
+console.log(`process.env.PORT at start: ${process.env.PORT}`);
 import Fastify, { FastifyInstance } from 'fastify';
 import { AppConfig } from './config.js';
 
@@ -13,6 +14,7 @@ import dbOptimizerPlugin from './plugins/db-optimizer.js';
 import advancedCachePlugin from './plugins/advanced-cache.js';
 import configManagerPlugin from './plugins/config-manager.js';
 import { prismaPlugin } from './services/prisma.js';
+import flowArchitecturePlugin from './plugins/flow-architecture.js';
 
 // Import utilities
 import logger from './utils/logger.js';
@@ -80,6 +82,9 @@ export async function registerPlugins(server: FastifyInstance): Promise<void> {
   
   // Register config manager plugin
   await server.register(configManagerPlugin);
+  
+  // Register flow architecture plugin
+  await server.register(flowArchitecturePlugin);
   
   // Register database optimizer
   // Get configuration with fallbacks for database optimizer
@@ -212,6 +217,9 @@ async function start() {
     const HOST = config.HOST ?? '0.0.0.0';
     const NODE_ENV = config.NODE_ENV ?? 'development';
 
+    server.log.info(`Configured PORT: ${config.PORT}`);
+    server.log.info(`Derived PORT: ${PORT}`);
+    server.log.info(`Derived HOST: ${HOST}`);
     // Start listening
     await server.listen({ port: PORT, host: HOST });
     
