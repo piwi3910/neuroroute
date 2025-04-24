@@ -480,45 +480,40 @@ export function HomePage() {
       <Title order={2}>Dashboard</Title>
       <Text>Real-time monitoring of Neuroroute API performance and usage.</Text>
       
-      <Grid gutter="md">
-        <Grid.Col span={6}>
-          <Paper withBorder p="md" radius="md">
-            <Title order={4} mb="md">Prompts per Hour</Title>
-            <PromptsPerHourChart data={promptsData} />
-          </Paper>
-        </Grid.Col>
-        
-        <Grid.Col span={6}>
-          <Paper withBorder p="md" radius="md">
-            <Title order={4} mb="md">Tokens per Hour</Title>
-            <TokensPerHourChart data={tokensData} />
-          </Paper>
-        </Grid.Col>
-      </Grid>
-      
+      {/* First row: Tokens per Model, Tokens per Hour, Prompts per Hour */}
       <Grid gutter="md">
         <Grid.Col span={4}>
-          <Paper withBorder p="md" radius="md">
-            <Title order={4} mb="md">System Resources</Title>
-            <SystemMetricsDisplay metrics={systemMetrics} />
-          </Paper>
-        </Grid.Col>
-        
-        <Grid.Col span={8}>
           <Paper withBorder p="md" radius="md">
             <Title order={4} mb="md">Tokens per Model</Title>
             <TokensPerModelChart data={modelData} />
           </Paper>
         </Grid.Col>
+        
+        <Grid.Col span={4}>
+          <Paper withBorder p="md" radius="md">
+            <Title order={4} mb="md">Tokens per Hour</Title>
+            <TokensPerHourChart data={tokensData} />
+          </Paper>
+        </Grid.Col>
+        
+        <Grid.Col span={4}>
+          <Paper withBorder p="md" radius="md">
+            <Title order={4} mb="md">Prompts per Hour</Title>
+            <PromptsPerHourChart data={promptsData} />
+          </Paper>
+        </Grid.Col>
       </Grid>
       
-      <Divider my="sm" />
+      {/* Second row: System Resources (spread across the screen) */}
+      <Paper withBorder p="md" radius="md">
+        <Title order={4} mb="md">System Resources</Title>
+        <SystemMetricsDisplay metrics={systemMetrics} />
+      </Paper>
       
-      {/* Flow Architecture Diagram */}
+      {/* Third row: Flow Architecture Diagram (spread across the screen) */}
       <FlowArchitectureDiagram latencyData={flowLatencyData} />
       
-      <Divider my="sm" />
-      
+      {/* Fourth row: Prompts Log (spread across the screen) */}
       <RealTimeLog logs={logs} />
     </Stack>
   );
