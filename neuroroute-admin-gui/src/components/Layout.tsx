@@ -16,7 +16,12 @@ import {
   IconUsers,
   IconSettings,
   IconClipboardList,
-  IconLogout
+  IconLogout,
+  IconServer,
+  IconBrain,
+  IconFilter,
+  IconCategory,
+  IconRoute
 } from '@tabler/icons-react';
 
 export function Layout() {
@@ -25,8 +30,19 @@ export function Layout() {
   const location = useLocation();
 
   // Navigation items
-  const navItems = [
+  const dashboardItems = [
     { label: 'Dashboard', path: '/', icon: <IconHome size={20} stroke={1.5} /> },
+    { label: 'Providers', path: '/providers', icon: <IconServer size={20} stroke={1.5} /> },
+    { label: 'Models', path: '/models', icon: <IconBrain size={20} stroke={1.5} /> },
+  ];
+
+  const processingItems = [
+    { label: 'Preprocessor', path: '/preprocessor', icon: <IconFilter size={20} stroke={1.5} /> },
+    { label: 'Classifier', path: '/classifier', icon: <IconCategory size={20} stroke={1.5} /> },
+    { label: 'Routing', path: '/routing', icon: <IconRoute size={20} stroke={1.5} /> },
+  ];
+
+  const adminItems = [
     { label: 'Users', path: '/users', icon: <IconUsers size={20} stroke={1.5} /> },
     { label: 'Settings', path: '/settings', icon: <IconSettings size={20} stroke={1.5} /> },
     { label: 'Audit Logs', path: '/audit-logs', icon: <IconClipboardList size={20} stroke={1.5} /> },
@@ -51,8 +67,9 @@ export function Layout() {
       </AppShell.Header>
 
       <AppShell.Navbar p="md">
+        {/* Dashboard section */}
         <Box>
-          {navItems.map((item) => (
+          {dashboardItems.map((item) => (
             <MantineNavLink
               key={item.path}
               component={NavLink}
@@ -60,10 +77,46 @@ export function Layout() {
               label={item.label}
               leftSection={item.icon}
               active={
-                item.path === '/' 
-                  ? location.pathname === '/' 
+                item.path === '/'
+                  ? location.pathname === '/'
                   : location.pathname.startsWith(item.path)
               }
+              variant="filled"
+              mb={8}
+            />
+          ))}
+        </Box>
+
+        <Divider my="sm" label="Processing" labelPosition="center" />
+        
+        {/* Processing section */}
+        <Box>
+          {processingItems.map((item) => (
+            <MantineNavLink
+              key={item.path}
+              component={NavLink}
+              to={item.path}
+              label={item.label}
+              leftSection={item.icon}
+              active={location.pathname.startsWith(item.path)}
+              variant="filled"
+              mb={8}
+            />
+          ))}
+        </Box>
+
+        <Divider my="sm" label="Administration" labelPosition="center" />
+        
+        {/* Admin section */}
+        <Box>
+          {adminItems.map((item) => (
+            <MantineNavLink
+              key={item.path}
+              component={NavLink}
+              to={item.path}
+              label={item.label}
+              leftSection={item.icon}
+              active={location.pathname.startsWith(item.path)}
               variant="filled"
               mb={8}
             />
