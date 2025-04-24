@@ -44,44 +44,11 @@ export function Layout() {
       padding="md"
     >
       <AppShell.Header>
-        <Group h="100%" px="md" justify="space-between">
+        <Group h="100%" px="md">
           <Group>
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
             <Title order={3}>Neuroroute Admin</Title>
           </Group>
-
-          {/* User menu */}
-          <Menu
-            position="bottom-end"
-            withArrow
-            shadow="md"
-            withinPortal
-            zIndex={1000}
-            keepMounted={false}
-            offset={5}
-          >
-            <Menu.Target>
-              <UnstyledButton>
-                <Group gap={7}>
-                  <Avatar size={30} radius="xl" color="blue">
-                    {user?.email?.charAt(0).toUpperCase() || 'U'}
-                  </Avatar>
-                  <Text fw={500} size="sm" lh={1} mr={3}>
-                    {user?.email || 'User'}
-                  </Text>
-                  <IconChevronDown size={rem(12)} stroke={1.5} />
-                </Group>
-              </UnstyledButton>
-            </Menu.Target>
-            <Menu.Dropdown>
-              <Menu.Item
-                leftSection={<IconLogout size={14} stroke={1.5} />}
-                onClick={logout}
-              >
-                Logout
-              </Menu.Item>
-            </Menu.Dropdown>
-          </Menu>
         </Group>
       </AppShell.Header>
 
