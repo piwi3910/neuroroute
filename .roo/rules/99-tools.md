@@ -1,0 +1,2 @@
+I will always use Contect7 MCP server to get the latest relevant documentation before starting any tasks.
+use searxng for any websearching
