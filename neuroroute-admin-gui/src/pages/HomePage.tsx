@@ -164,9 +164,26 @@ const TokensPerModelChart = ({ data }) => (
         cx="50%"
         cy="50%"
         labelLine={false}
-        label={{
-          position: "inside",
-          content: ({ percent }) => `${(percent * 100).toFixed(0)}%`
+        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
+          const RADIAN = Math.PI / 180;
+          // Calculate the position for the label
+          const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+          
+          return (
+            <text
+              x={x}
+              y={y}
+              fill="white"
+              textAnchor="middle"
+              dominantBaseline="central"
+              fontSize="12"
+              fontWeight="bold"
+            >
+              {`${(percent * 100).toFixed(0)}%`}
+            </text>
+          );
         }}
         outerRadius={80}
         fill="#8884d8"
