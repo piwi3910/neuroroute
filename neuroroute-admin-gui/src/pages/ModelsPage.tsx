@@ -31,8 +31,8 @@ const initialModels = [
     enabled: true,
     capabilities: ['text', 'function-calling', 'vision'],
     contextWindow: 128000,
-    costPer1kTokensInput: 0.01,
-    costPer1kTokensOutput: 0.03,
+    costPer1MTokensInput: 10,
+    costPer1MTokensOutput: 30,
     priority: 1
   },
   {
@@ -42,8 +42,8 @@ const initialModels = [
     enabled: true,
     capabilities: ['text', 'function-calling'],
     contextWindow: 16000,
-    costPer1kTokensInput: 0.0005,
-    costPer1kTokensOutput: 0.0015,
+    costPer1MTokensInput: 0.5,
+    costPer1MTokensOutput: 1.5,
     priority: 2
   },
   {
@@ -53,8 +53,8 @@ const initialModels = [
     enabled: true,
     capabilities: ['text', 'vision', 'function-calling'],
     contextWindow: 200000,
-    costPer1kTokensInput: 0.015,
-    costPer1kTokensOutput: 0.075,
+    costPer1MTokensInput: 15,
+    costPer1MTokensOutput: 75,
     priority: 1
   },
   {
@@ -64,8 +64,8 @@ const initialModels = [
     enabled: true,
     capabilities: ['text', 'vision', 'function-calling'],
     contextWindow: 200000,
-    costPer1kTokensInput: 0.003,
-    costPer1kTokensOutput: 0.015,
+    costPer1MTokensInput: 3,
+    costPer1MTokensOutput: 15,
     priority: 2
   },
   {
@@ -75,8 +75,8 @@ const initialModels = [
     enabled: false,
     capabilities: ['text'],
     contextWindow: 8000,
-    costPer1kTokensInput: 0,
-    costPer1kTokensOutput: 0,
+    costPer1MTokensInput: 0,
+    costPer1MTokensOutput: 0,
     priority: 3
   }
 ];
@@ -108,8 +108,8 @@ export function ModelsPage() {
     enabled: true,
     capabilities: [] as string[],
     contextWindow: 0,
-    costPer1kTokensInput: 0,
-    costPer1kTokensOutput: 0,
+    costPer1MTokensInput: 0,
+    costPer1MTokensOutput: 0,
     priority: 1
   });
 
@@ -154,7 +154,7 @@ export function ModelsPage() {
               <Table.Th>Provider</Table.Th>
               <Table.Th>Capabilities</Table.Th>
               <Table.Th>Context Window</Table.Th>
-              <Table.Th>Cost (Input/Output)</Table.Th>
+              <Table.Th>Cost (per 1M tokens)</Table.Th>
               <Table.Th>Priority</Table.Th>
               <Table.Th>Status</Table.Th>
               <Table.Th>Actions</Table.Th>
@@ -177,7 +177,7 @@ export function ModelsPage() {
                   </Group>
                 </Table.Td>
                 <Table.Td>{model.contextWindow.toLocaleString()}</Table.Td>
-                <Table.Td>${model.costPer1kTokensInput} / ${model.costPer1kTokensOutput}</Table.Td>
+                <Table.Td>${model.costPer1MTokensInput} / ${model.costPer1MTokensOutput}</Table.Td>
                 <Table.Td>{model.priority}</Table.Td>
                 <Table.Td>
                   <Badge color={model.enabled ? 'green' : 'gray'}>
@@ -251,21 +251,21 @@ export function ModelsPage() {
             />
             
             <NumberInput
-              label="Cost per 1K Input Tokens ($)"
-              value={editForm.costPer1kTokensInput}
-              onChange={(value) => setEditForm({...editForm, costPer1kTokensInput: Number(value)})}
+              label="Cost per 1M Input Tokens ($)"
+              value={editForm.costPer1MTokensInput}
+              onChange={(value) => setEditForm({...editForm, costPer1MTokensInput: Number(value)})}
               min={0}
-              precision={6}
-              step={0.0001}
+              precision={2}
+              step={0.1}
             />
             
             <NumberInput
-              label="Cost per 1K Output Tokens ($)"
-              value={editForm.costPer1kTokensOutput}
-              onChange={(value) => setEditForm({...editForm, costPer1kTokensOutput: Number(value)})}
+              label="Cost per 1M Output Tokens ($)"
+              value={editForm.costPer1MTokensOutput}
+              onChange={(value) => setEditForm({...editForm, costPer1MTokensOutput: Number(value)})}
               min={0}
-              precision={6}
-              step={0.0001}
+              precision={2}
+              step={0.1}
             />
             
             <NumberInput

@@ -49,7 +49,7 @@ const initialSettings = {
   },
   lowestCost: {
     enabled: true,
-    maxCostPer1kTokens: 0.05,
+    maxCostPer1MTokens: 50,
     fallbackStrategy: 'best-model',
     excludedModels: [],
     prioritizeFreeModels: true
@@ -369,14 +369,14 @@ export function RoutingPage() {
               <Divider my="sm" />
 
               <NumberInput
-                label="Maximum Cost per 1K Tokens ($)"
+                label="Maximum Cost per 1M Tokens ($)"
                 description="Maximum cost before falling back to another strategy"
-                value={settings.lowestCost.maxCostPer1kTokens}
-                onChange={(value) => updateSettings('lowestCost', 'maxCostPer1kTokens', Number(value))}
+                value={settings.lowestCost.maxCostPer1MTokens}
+                onChange={(value) => updateSettings('lowestCost', 'maxCostPer1MTokens', Number(value))}
                 min={0}
-                max={1}
-                step={0.001}
-                precision={3}
+                max={1000}
+                step={1}
+                precision={2}
               />
 
               <Select
