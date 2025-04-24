@@ -51,7 +51,7 @@ export function Layout() {
           </Group>
 
           {/* User menu */}
-          <Menu position="bottom-end" withArrow shadow="md">
+          <Menu position="bottom-end" withArrow shadow="md" withinPortal>
             <Menu.Target>
               <UnstyledButton>
                 <Group gap={7}>
