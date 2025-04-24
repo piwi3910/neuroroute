@@ -3,6 +3,7 @@ import { FastifyPluginAsync } from 'fastify';
 import { readFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import process from 'node:process'; // Explicitly import process for ESM compatibility
 
 // Get the directory name of the current module
 const __filename = fileURLToPath(import.meta.url);
@@ -52,7 +53,7 @@ const healthRoutes: FastifyPluginAsync = async (fastify) => {
         },
       },
     },
-    handler: async (request, reply) => {
+    handler: async (request) => {
       // Get config with fallback
       const config = (fastify as any).config ?? {};
       const startTime = process.hrtime();

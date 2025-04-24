@@ -16,6 +16,7 @@ import { createClassifierService } from '../services/classifier/index.js';
 import { createRoutingEngine } from '../services/router/routing/index.js';
 import { createNormalizationEngine } from '../services/router/normalization/index.js';
 import { createLogger } from '../utils/logger.js';
+import adapterRegistry from '../models/adapter-registry.js';
 
 const logger = createLogger({
   level: 'info',
@@ -54,6 +55,10 @@ const flowArchitecturePlugin: FastifyPluginAsync = async (fastify) => {
       routing: routingEngine,
       normalization: normalizationEngine
     });
+    
+    // Register the model adapter registry
+    fastify.decorate('models', adapterRegistry);
+    logger.debug('Model adapter registry registered');
 
     logger.info('Flow Architecture components registered successfully');
   } catch (error) {

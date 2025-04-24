@@ -1,4 +1,5 @@
 import { FastifyPluginAsync, FastifyRequest, FastifyReply, RouteOptions, RawServerDefault, RawRequestDefaultExpression, RawReplyDefaultExpression } from 'fastify';
+import process from 'node:process'; // Explicitly import process for ESM compatibility
 // Assuming types exist, adjust imports as needed later
 import { PreprocessorService } from '../services/preprocessor/interfaces.js';
 import { ClassifierService, ClassifiedIntent } from '../services/classifier/interfaces.js';
