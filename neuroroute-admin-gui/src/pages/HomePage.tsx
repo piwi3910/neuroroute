@@ -31,14 +31,14 @@ import {
   IconList,
   IconRefresh
 } from '@tabler/icons-react';
-import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  Legend, 
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
@@ -152,7 +152,7 @@ const PromptsPerHourChart = ({ data }) => (
       <CartesianGrid strokeDasharray="3 3" />
       <XAxis dataKey="hour" />
       <YAxis />
-      <Tooltip />
+      <RechartsTooltip />
       <Legend />
       <Line type="monotone" dataKey="value" name="Prompts" stroke="#8884d8" activeDot={{ r: 8 }} />
     </LineChart>
@@ -165,7 +165,7 @@ const TokensPerHourChart = ({ data }) => (
       <CartesianGrid strokeDasharray="3 3" />
       <XAxis dataKey="hour" />
       <YAxis />
-      <Tooltip />
+      <RechartsTooltip />
       <Legend />
       <Line type="monotone" dataKey="value" name="Tokens" stroke="#82ca9d" activeDot={{ r: 8 }} />
     </LineChart>
@@ -210,7 +210,7 @@ const TokensPerModelChart = ({ data }) => (
           <Cell key={`cell-${index}`} fill={entry.color} />
         ))}
       </Pie>
-      <Tooltip formatter={(value) => `${value.toLocaleString()} tokens`} />
+      <RechartsTooltip formatter={(value) => `${value.toLocaleString()} tokens`} />
       <Legend />
     </PieChart>
   </ResponsiveContainer>
@@ -222,7 +222,7 @@ const LatencyPerModelChart = ({ data }) => (
       <CartesianGrid strokeDasharray="3 3" />
       <XAxis dataKey="model" />
       <YAxis label={{ value: 'ms', angle: -90, position: 'insideLeft' }} />
-      <Tooltip />
+      <RechartsTooltip />
       <Legend />
       <Bar dataKey="latency" name="Latency (ms)" fill="#8884d8">
         {data.map((entry, index) => (
