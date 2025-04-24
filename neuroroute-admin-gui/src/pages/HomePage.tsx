@@ -12,7 +12,8 @@ import {
   RingProgress,
   Center,
   Stack,
-  Divider
+  Divider,
+  Box
 } from '@mantine/core';
 import { 
   LineChart, 
@@ -75,6 +76,23 @@ const generateSystemMetrics = () => {
     cpu: Math.floor(Math.random() * 100),
     memory: Math.floor(Math.random() * 100),
     disk: Math.floor(Math.random() * 100)
+  };
+};
+
+// Mock data for flow architecture
+const generateFlowLatencyData = () => {
+  return {
+    input: Math.floor(Math.random() * 20) + 5,
+    preprocessor: Math.floor(Math.random() * 30) + 10,
+    classifier: Math.floor(Math.random() * 50) + 20,
+    router: Math.floor(Math.random() * 25) + 5,
+    models: {
+      'gpt-4': Math.floor(Math.random() * 500) + 200,
+      'gpt-3.5-turbo': Math.floor(Math.random() * 300) + 100,
+      'claude-3': Math.floor(Math.random() * 400) + 150,
+      'llama-3': Math.floor(Math.random() * 350) + 120
+    },
+    output: Math.floor(Math.random() * 15) + 5
   };
 };
 
@@ -231,6 +249,134 @@ const SystemMetricsDisplay = ({ metrics }) => (
   </Group>
 );
 
+// Flow Architecture Diagram Component
+const FlowArchitectureDiagram = ({ latencyData }) => {
+  const boxStyle = {
+    border: '2px solid #ccc',
+    borderRadius: '8px',
+    padding: '10px',
+    textAlign: 'center' as const,
+    position: 'relative' as const,
+    minWidth: '120px',
+    backgroundColor: '#f9f9f9'
+  };
+
+  const arrowStyle = {
+    position: 'relative' as const,
+    height: '2px',
+    backgroundColor: '#ccc',
+    flex: 1,
+    margin: '0 5px',
+    minWidth: '30px'
+  };
+
+  const latencyBadgeStyle = {
+    position: 'absolute' as const,
+    top: '-12px',
+    right: '-12px',
+    backgroundColor: '#2196F3',
+    color: 'white',
+    borderRadius: '12px',
+    padding: '2px 8px',
+    fontSize: '12px',
+    fontWeight: 'bold'
+  };
+
+  const modelContainerStyle = {
+    display: 'flex' as const,
+    flexDirection: 'column' as const,
+    gap: '10px',
+    border: '2px dashed #ccc',
+    borderRadius: '8px',
+    padding: '15px',
+    backgroundColor: '#f0f0f0'
+  };
+
+  return (
+    <Card withBorder p="md">
+      <Title order={4} mb="md">Flow Architecture</Title>
+      <Text mb="lg">End-to-end request flow with component latencies (ms)</Text>
+      
+      <Box mb="lg">
+        <Group position="center" align="center" style={{ flexWrap: 'nowrap' }}>
+          {/* Input */}
+          <Box style={boxStyle}>
+            <Text fw={500}>Input</Text>
+            <div style={latencyBadgeStyle}>{latencyData.input} ms</div>
+          </Box>
+          
+          {/* Arrow */}
+          <div style={arrowStyle}>
+            <div style={{ position: 'absolute', right: '-5px', top: '-5px', width: '0', height: '0', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '5px solid #ccc' }}></div>
+          </div>
+          
+          {/* Preprocessor */}
+          <Box style={boxStyle}>
+            <Text fw={500}>Preprocessor</Text>
+            <div style={latencyBadgeStyle}>{latencyData.preprocessor} ms</div>
+          </Box>
+          
+          {/* Arrow */}
+          <div style={arrowStyle}>
+            <div style={{ position: 'absolute', right: '-5px', top: '-5px', width: '0', height: '0', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '5px solid #ccc' }}></div>
+          </div>
+          
+          {/* Classifier */}
+          <Box style={boxStyle}>
+            <Text fw={500}>Classifier</Text>
+            <div style={latencyBadgeStyle}>{latencyData.classifier} ms</div>
+          </Box>
+          
+          {/* Arrow */}
+          <div style={arrowStyle}>
+            <div style={{ position: 'absolute', right: '-5px', top: '-5px', width: '0', height: '0', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '5px solid #ccc' }}></div>
+          </div>
+          
+          {/* Router */}
+          <Box style={boxStyle}>
+            <Text fw={500}>Router</Text>
+            <div style={latencyBadgeStyle}>{latencyData.router} ms</div>
+          </Box>
+          
+          {/* Arrow */}
+          <div style={arrowStyle}>
+            <div style={{ position: 'absolute', right: '-5px', top: '-5px', width: '0', height: '0', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '5px solid #ccc' }}></div>
+          </div>
+          
+          {/* Models Container */}
+          <Box style={modelContainerStyle}>
+            <Text fw={500} ta="center">Models</Text>
+            <Group position="center" spacing="xs">
+              {Object.entries(latencyData.models).map(([model, latency]) => (
+                <Box key={model} style={{ ...boxStyle, minWidth: '100px' }}>
+                  <Text size="sm">{model}</Text>
+                  <div style={latencyBadgeStyle}>{latency} ms</div>
+                </Box>
+              ))}
+            </Group>
+          </Box>
+          
+          {/* Arrow */}
+          <div style={arrowStyle}>
+            <div style={{ position: 'absolute', right: '-5px', top: '-5px', width: '0', height: '0', borderTop: '5px solid transparent', borderBottom: '5px solid transparent', borderLeft: '5px solid #ccc' }}></div>
+          </div>
+          
+          {/* Output */}
+          <Box style={boxStyle}>
+            <Text fw={500}>Output</Text>
+            <div style={latencyBadgeStyle}>{latencyData.output} ms</div>
+          </Box>
+        </Group>
+      </Box>
+      
+      <Group position="apart">
+        <Text size="sm" c="dimmed">Total processing pipeline latency (excluding model): {latencyData.input + latencyData.preprocessor + latencyData.classifier + latencyData.router + latencyData.output} ms</Text>
+        <Badge color="blue">Updated: {new Date().toLocaleTimeString()}</Badge>
+      </Group>
+    </Card>
+  );
+};
+
 // Real-time log component
 const RealTimeLog = ({ logs }) => (
   <Card withBorder p="md">
@@ -283,6 +429,7 @@ export function HomePage() {
   const [modelData, setModelData] = useState(generateModelData());
   const [latencyData, setLatencyData] = useState(generateLatencyData());
   const [systemMetrics, setSystemMetrics] = useState(generateSystemMetrics());
+  const [flowLatencyData, setFlowLatencyData] = useState(generateFlowLatencyData());
   const [logs, setLogs] = useState(generateLogEntries(20));
 
   // Simulate real-time updates
@@ -307,6 +454,9 @@ export function HomePage() {
 
       // Update system metrics
       setSystemMetrics(generateSystemMetrics());
+      
+      // Update flow latency data
+      setFlowLatencyData(generateFlowLatencyData());
 
       // Add a new log entry
       const newLog = {
@@ -364,6 +514,11 @@ export function HomePage() {
         <Title order={4} mb="md">System Resources</Title>
         <SystemMetricsDisplay metrics={systemMetrics} />
       </Paper>
+      
+      <Divider my="sm" />
+      
+      {/* Flow Architecture Diagram */}
+      <FlowArchitectureDiagram latencyData={flowLatencyData} />
       
       <Divider my="sm" />
       
