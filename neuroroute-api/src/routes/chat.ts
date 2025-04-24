@@ -32,7 +32,33 @@ const chatRoutes: FastifyPluginAsync = async (fastify) => {
               required: ['role', 'content'],
               properties: {
                 role: { type: 'string', enum: ['system', 'user', 'assistant', 'function', 'tool'] },
-                content: { type: 'string', nullable: true },
+                content: {
+                  oneOf: [
+                    { type: 'string', nullable: true }, // Original string type (allow null for assistant messages without content)
+                    { // Array type for multimodal content
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        required: ['type'],
+                        properties: {
+                          type: { type: 'string', enum: ['text', 'image_url'] },
+                          text: { type: 'string' }, // For text parts
+                          image_url: { // For image parts
+                            type: 'object',
+                            required: ['url'],
+                            properties: {
+                              url: { type: 'string', format: 'uri', description: 'The URL of the image.' },
+                              detail: { type: 'string', enum: ['low', 'high', 'auto'], default: 'auto', description: 'Specifies the detail level of the image.' }
+                            }
+                          }
+                        },
+                        // Note: JSON Schema doesn't easily enforce conditional requirements (e.g., 'text' required if type is 'text').
+                        // Further validation might be needed in the handler if strict enforcement is required.
+                      }
+                    }
+                  ],
+                  description: 'The content of the message, can be a string or an array of content parts (for multimodal input).'
+                },
                 name: { type: 'string' },
                 tool_call_id: { type: 'string' }
               }
