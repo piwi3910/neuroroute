@@ -82,6 +82,14 @@ export interface PreprocessorRegistry {
    * @returns The preprocessor or undefined if not found
    */
   get(name: string): Preprocessor | undefined;
+  /**
+   * Process a prompt through all enabled preprocessors
+   * 
+   * @param prompt - The prompt to process
+   * @param options - Optional configuration for the preprocessors
+   * @returns The processed prompt
+   */
+  process(prompt: string, options?: PreprocessorOptions): Promise<string>;
 }
 
 /**
