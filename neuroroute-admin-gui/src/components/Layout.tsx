@@ -15,12 +15,13 @@ import {
   IconHome,
   IconUsers,
   IconSettings,
-  IconClipboardList
+  IconClipboardList,
+  IconLogout
 } from '@tabler/icons-react';
 
 export function Layout() {
   const [opened, { toggle }] = useDisclosure();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const location = useLocation();
 
   // Navigation items
@@ -30,6 +31,11 @@ export function Layout() {
     { label: 'Settings', path: '/settings', icon: <IconSettings size={20} stroke={1.5} /> },
     { label: 'Audit Logs', path: '/audit-logs', icon: <IconClipboardList size={20} stroke={1.5} /> },
   ];
+
+  // Handle logout
+  const handleLogout = () => {
+    logout();
+  };
 
   return (
     <AppShell
@@ -65,6 +71,14 @@ export function Layout() {
         </Box>
 
         <Divider my="sm" />
+        
+        <MantineNavLink
+          label="Log Off"
+          leftSection={<IconLogout size={20} stroke={1.5} />}
+          onClick={handleLogout}
+          color="red"
+          mb={8}
+        />
         
         <Text size="xs" c="dimmed" ta="center" mt="xl">
           Neuroroute Admin v1.0.0
