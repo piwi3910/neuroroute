@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "dist/src/app.js",
   "scripts": {
-    "dev": "ts-node-esm src/app.ts",
+    "dev": "node --loader ts-node/esm src/app.ts",
     "build": "tsc && npm run fix:esm-comprehensive",
     "start": "node dist/src/app.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
