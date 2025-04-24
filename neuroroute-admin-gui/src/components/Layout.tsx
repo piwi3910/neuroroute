@@ -44,11 +44,59 @@ export function Layout() {
       padding="md"
     >
       <AppShell.Header>
-        <Group h="100%" px="md">
+        <Group h="100%" px="md" position="apart">
           <Group>
             <Burger opened={opened} onClick={toggle} hiddenFrom="sm" size="sm" />
             <Title order={3}>Neuroroute Admin</Title>
           </Group>
+          
+          {/* User menu */}
+          <Menu position="bottom-end" withArrow shadow="md" withinPortal zIndex={1000}>
+            <Menu.Target>
+              <UnstyledButton
+                sx={{
+                  padding: '8px',
+                  borderRadius: '50%',
+                  transition: 'background-color 0.2s ease',
+                  '&:hover': {
+                    backgroundColor: 'rgba(0, 0, 0, 0.05)',
+                  },
+                }}
+              >
+                <Group gap={7}>
+                  <Avatar size={36} radius="xl" color="primary">
+                    {user?.email?.charAt(0).toUpperCase() || 'U'}
+                  </Avatar>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                    <Text fw={500} size="sm" lh={1} mr={3}>
+                      {user?.email || 'User'}
+                    </Text>
+                    <Text c="dimmed" size="xs">
+                      Administrator
+                    </Text>
+                  </div>
+                  <IconChevronDown size={rem(14)} stroke={1.5} />
+                </Group>
+              </UnstyledButton>
+            </Menu.Target>
+            <Menu.Dropdown>
+              <Menu.Item
+                leftSection={<IconSettings size={14} stroke={1.5} />}
+                component={NavLink}
+                to="/profile"
+              >
+                Profile
+              </Menu.Item>
+              <Menu.Divider />
+              <Menu.Item
+                leftSection={<IconLogout size={14} stroke={1.5} />}
+                onClick={logout}
+                color="red"
+              >
+                Logout
+              </Menu.Item>
+            </Menu.Dropdown>
+          </Menu>
         </Group>
       </AppShell.Header>
 

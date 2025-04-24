@@ -647,28 +647,10 @@ export function HomePage() {
           color: 'white',
         }}
       >
-        <Flex justify="space-between" align="center">
-          <Box>
-            <Title order={2} mb="xs">Neuroroute Dashboard</Title>
-            <Text size="lg">Real-time monitoring of Neuroroute API performance and usage.</Text>
-          </Box>
-          <Tooltip label="Refresh data">
-            <Button
-              variant="white"
-              radius="xl"
-              leftSection={<IconRefresh size={16} />}
-              onClick={() => {
-                setModelData(generateModelData());
-                setTokensData(generateTimeData(24, 5000, 3000));
-                setPromptsData(generateTimeData(24, 150, 100));
-                setSystemMetrics(generateSystemMetrics());
-                setFlowLatencyData(generateFlowLatencyData());
-              }}
-            >
-              Refresh
-            </Button>
-          </Tooltip>
-        </Flex>
+        <Box>
+          <Title order={2} mb="xs">Neuroroute Dashboard</Title>
+          <Text size="lg">Real-time monitoring of Neuroroute API performance and usage.</Text>
+        </Box>
       </Paper>
       
       {/* First row: Tokens per Model, Tokens per Hour, Prompts per Hour */}
